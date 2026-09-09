@@ -74,8 +74,13 @@ export const AuthScreen: React.FC = () => {
         if (authentication?.accessToken) {
           try {
             setIsAuthenticating(true);
-            setErrorMessage(null);
-            const profile = await fetchGoogleUserInfo(authentication.accessToken);
+            const idToken =
+              authentication.idToken ||
+              (response as any).params?.id_token;
+            const profile = await fetchGoogleUserInfo(
+              authentication.accessToken,
+              idToken
+            );
             await saveUserSession(profile);
             setUser(profile);
           } catch (err: any) {

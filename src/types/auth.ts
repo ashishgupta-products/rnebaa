@@ -4,6 +4,7 @@ export interface UserProfile {
   email: string;
   picture?: string;
   verifiedEmail?: boolean;
+  idToken?: string;
 }
 
 export interface AuthState {

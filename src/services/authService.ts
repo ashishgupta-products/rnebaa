@@ -42,7 +42,10 @@ export async function clearUserSession(): Promise<void> {
 /**
  * Fetch Google User Info using OAuth access token
  */
-export async function fetchGoogleUserInfo(accessToken: string): Promise<UserProfile> {
+export async function fetchGoogleUserInfo(
+  accessToken: string,
+  idToken?: string
+): Promise<UserProfile> {
   const response = await fetch('https://www.googleapis.com/userinfo/v2/me', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -61,6 +64,7 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<UserProf
     email: data.email,
     picture: data.picture,
     verifiedEmail: data.verified_email,
+    idToken,
   };
 }
 
