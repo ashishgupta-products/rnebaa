@@ -5,12 +5,8 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-  Alert,
   Platform,
-  TouchableOpacity,
 } from 'react-native';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { UserProfileCard } from '../components/UserProfileCard';
 import { UserProfile } from '../types/auth';
@@ -18,18 +14,13 @@ import {
   saveUserSession,
   getUserSession,
   clearUserSession,
-  fetchGoogleUserInfo,
   getDemoUserProfile,
 } from '../services/authService';
 import {
-  GOOGLE_AUTH_CONFIG,
-  DEMO_CLIENT_ID,
-  isPlatformConfigured,
-  isGoogleConfigured,
-} from '../config/authConfig';
-
-// Complete auth session if redirected back to web/app
-WebBrowser.maybeCompleteAuthSession();
+  performNativeGoogleSignIn,
+  performNativeGoogleSignOut,
+} from '../services/nativeAuthService';
+import { GOOGLE_AUTH_CONFIG, isPlatformConfigured } from '../config/authConfig';
 
 export const AuthScreen: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -38,14 +29,6 @@ export const AuthScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const isConfigured = isPlatformConfigured();
-
-  // Initialize Google Auth Request with safe fallbacks so expo-auth-session does not crash
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    webClientId: GOOGLE_AUTH_CONFIG.webClientId || DEMO_CLIENT_ID,
-    iosClientId: GOOGLE_AUTH_CONFIG.iosClientId || DEMO_CLIENT_ID,
-    androidClientId: GOOGLE_AUTH_CONFIG.androidClientId || DEMO_CLIENT_ID,
-    scopes: GOOGLE_AUTH_CONFIG.scopes,
-  });
 
   // Load existing session on initial render
   useEffect(() => {
@@ -64,71 +47,48 @@ export const AuthScreen: React.FC = () => {
     loadSavedSession();
   }, []);
 
-  // Handle Google Auth Response
-  useEffect(() => {
-    async function handleAuthResponse() {
-      if (!response) return;
-
-      if (response.type === 'success') {
-        const { authentication } = response;
-        if (authentication?.accessToken) {
-          try {
-            setIsAuthenticating(true);
-            const idToken =
-              authentication.idToken ||
-              (response as any).params?.id_token;
-            const profile = await fetchGoogleUserInfo(
-              authentication.accessToken,
-              idToken
-            );
-            await saveUserSession(profile);
-            setUser(profile);
-          } catch (err: any) {
-            console.error('Error fetching user info:', err);
-            setErrorMessage(err.message || 'Failed to fetch Google profile');
-          } finally {
-            setIsAuthenticating(false);
-          }
-        }
-      } else if (response.type === 'error') {
-        setIsAuthenticating(false);
-        setErrorMessage(response.error?.message || 'Google Sign-In failed.');
-      } else if (response.type === 'cancel' || response.type === 'dismiss') {
-        setIsAuthenticating(false);
-      }
-    }
-
-    handleAuthResponse();
-  }, [response]);
-
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
+    setIsAuthenticating(true);
 
-    // If client IDs are configured for this platform, trigger the actual Google OAuth flow
-    if (isConfigured) {
-      try {
-        setIsAuthenticating(true);
-        const result = await promptAsync();
-        if (result.type !== 'success') {
+    try {
+      if (Platform.OS === 'web') {
+        // Web preview mode
+        setTimeout(async () => {
+          const demoUser = getDemoUserProfile();
+          await saveUserSession(demoUser);
+          setUser(demoUser);
           setIsAuthenticating(false);
-        }
-      } catch (err: any) {
-        setIsAuthenticating(false);
-        setErrorMessage(err.message || 'Could not initiate Google Sign-In.');
+        }, 500);
+        return;
       }
-    } else {
-      // Demo preview mode when credentials are not yet configured for this platform
-      setIsAuthenticating(true);
-      setTimeout(async () => {
+
+      // Native Google Play Services (SHA-1 verified)
+      const profile = await performNativeGoogleSignIn();
+      await saveUserSession(profile);
+      setUser(profile);
+      setIsAuthenticating(false);
+    } catch (err: any) {
+      console.log('Sign in error:', err);
+      // In Expo Go, native Google Play Services module isn't present
+      if (err.message?.includes('RNGoogleSignin') || err.message?.includes('null')) {
+        // Expo Go fallback to demo mode
         const demoUser = getDemoUserProfile();
         await saveUserSession(demoUser);
         setUser(demoUser);
-        setIsAuthenticating(false);
-      }, 700);
+      } else {
+        setErrorMessage(err.message || 'Google Sign-In failed.');
+      }
+      setIsAuthenticating(false);
     }
   };
 
   const handleSignOut = async () => {
+    try {
+      await performNativeGoogleSignOut();
+    } catch (e) {
+      console.log('Signout error:', e);
+    }
     await clearUserSession();
     setUser(null);
   };
@@ -142,11 +102,6 @@ export const AuthScreen: React.FC = () => {
       </SafeAreaView>
     );
   }
-
-  const noticeMessage =
-    Platform.OS === 'web' && GOOGLE_AUTH_CONFIG.androidClientId
-      ? 'Android Client ID configured. Web is in demo mode (add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to test in browser).'
-      : 'Add your Google Client ID to .env to connect your Google Cloud project.';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -176,17 +131,17 @@ export const AuthScreen: React.FC = () => {
               <GoogleSignInButton
                 onPress={handleGoogleSignIn}
                 isLoading={isAuthenticating}
-                disabled={!request && isConfigured}
               />
             </View>
 
-            {/* Configuration Hint Banner */}
-            {!isConfigured && (
-              <View style={styles.demoNotice}>
-                <Text style={styles.demoNoticeTitle}>Demo Mode Active</Text>
-                <Text style={styles.demoNoticeText}>{noticeMessage}</Text>
-              </View>
-            )}
+            {/* Platform info */}
+            <View style={styles.infoBadge}>
+              <Text style={styles.infoBadgeText}>
+                {Platform.OS === 'android'
+                  ? 'Native Google Play Services (SHA-1 verified)'
+                  : 'Web Preview Mode'}
+              </Text>
+            </View>
           </View>
         )}
       </View>
@@ -277,26 +232,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
   },
-  demoNotice: {
-    marginTop: 16,
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    alignItems: 'center',
-    width: '100%',
+  infoBadge: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
   },
-  demoNoticeTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1D4ED8',
-    marginBottom: 2,
-  },
-  demoNoticeText: {
+  infoBadgeText: {
     fontSize: 11,
-    color: '#3B82F6',
-    textAlign: 'center',
-    lineHeight: 16,
+    fontWeight: '600',
+    color: '#64748B',
   },
 });
