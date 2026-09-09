@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "EarnByApps",
+    "slug": "earn-by-apps",
+    "scheme": "earnbyapps",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.earnbyapps.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-web-browser"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ebbdc10c-f1c4-4669-a73c-5a8ca9875fa2"
+      }
+    },
+    "owner": "ashishgupta123456"
+  }
+}
