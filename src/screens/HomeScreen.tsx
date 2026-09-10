@@ -17,6 +17,7 @@ import { fetchLiveCampaigns } from '../services/campaignService';
 interface HomeScreenProps {
   user: UserProfile;
   onNavigateToTab: (tab: 'history' | 'profile') => void;
+  onSelectCampaign: (campaign: Campaign) => void;
 }
 
 const CATEGORIES = ['All', 'App Install', 'Finance', 'Gaming'];
@@ -24,6 +25,7 @@ const CATEGORIES = ['All', 'App Install', 'Finance', 'Gaming'];
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   user,
   onNavigateToTab,
+  onSelectCampaign,
 }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -158,7 +160,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           {filteredCampaigns.map((item) => {
             const initialLetter = item.name.charAt(0).toUpperCase();
             return (
-              <View key={item.id} style={styles.campaignCard}>
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.9}
+                style={styles.campaignCard}
+                onPress={() => onSelectCampaign(item)}
+              >
                 <View style={styles.cardHeader}>
                   <View style={styles.cardIconBox}>
                     <Text style={styles.cardIconText}>{initialLetter}</Text>
@@ -189,16 +196,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     ))}
                   </View>
 
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    style={styles.startTaskButton}
-                    onPress={() => handleOpenCampaign(item.externalUrl)}
-                  >
-                    <Text style={styles.startTaskButtonText}>Start Task</Text>
+                  <View style={styles.startTaskButton}>
+                    <Text style={styles.startTaskButtonText}>View Task</Text>
                     <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-                  </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>

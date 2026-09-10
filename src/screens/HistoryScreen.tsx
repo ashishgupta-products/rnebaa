@@ -13,6 +13,7 @@ import { TaskHistoryItem } from '../types/campaign';
 interface HistoryScreenProps {
   user: UserProfile;
   onNavigateToHome: () => void;
+  submissions?: TaskHistoryItem[];
 }
 
 const SAMPLE_HISTORY: TaskHistoryItem[] = [
@@ -22,7 +23,7 @@ const SAMPLE_HISTORY: TaskHistoryItem[] = [
     reward: 300,
     status: 'Pending',
     date: 'Today, 12:30 PM',
-    proofType: 'Screenshot',
+    proofType: 'Account ID / Username',
   },
   {
     id: 'h-2',
@@ -47,9 +48,18 @@ const STATUS_FILTERS = ['All', 'Paid', 'Pending', 'Rejected'];
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   user,
   onNavigateToHome,
+  submissions,
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
-  const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(SAMPLE_HISTORY);
+  const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(
+    submissions && submissions.length > 0 ? submissions : SAMPLE_HISTORY
+  );
+
+  React.useEffect(() => {
+    if (submissions && submissions.length > 0) {
+      setHistoryItems(submissions);
+    }
+  }, [submissions]);
 
   const balance = user.backendUser?.balance || 0;
   const paidCount = historyItems.filter((i) => i.status === 'Paid').length;

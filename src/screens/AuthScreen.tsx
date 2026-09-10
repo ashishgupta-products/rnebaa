@@ -13,8 +13,10 @@ import { BottomNavBar } from '../components/BottomNavBar';
 import { HomeScreen } from './HomeScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { TaskDetailsScreen } from './TaskDetailsScreen';
 import { TabType } from '../types/navigation';
 import { UserProfile } from '../types/auth';
+import { Campaign, TaskHistoryItem } from '../types/campaign';
 import {
   saveUserSession,
   getUserSession,
@@ -36,6 +38,8 @@ import { GOOGLE_AUTH_CONFIG, isPlatformConfigured } from '../config/authConfig';
 export const AuthScreen: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('home');
+  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+  const [userSubmissions, setUserSubmissions] = useState<TaskHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -158,6 +162,23 @@ export const AuthScreen: React.FC = () => {
 
   // If user is authenticated, render the main app experience with bottom navigation
   if (user) {
+    if (selectedCampaign) {
+      return (
+        <SafeAreaView style={styles.mainContainer}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+          <TaskDetailsScreen
+            campaign={selectedCampaign}
+            userBalance={user.backendUser?.balance || 0}
+            isAlreadySubmitted={userSubmissions.some((s) => s.appName === selectedCampaign.name)}
+            onBack={() => setSelectedCampaign(null)}
+            onSubmitProof={(submission) => {
+              setUserSubmissions((prev) => [submission, ...prev]);
+            }}
+          />
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView style={styles.mainContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -165,13 +186,21 @@ export const AuthScreen: React.FC = () => {
           {activeTab === 'home' && (
             <HomeScreen
               user={user}
-              onNavigateToTab={(tab) => setActiveTab(tab)}
+              onNavigateToTab={(tab) => {
+                setSelectedCampaign(null);
+                setActiveTab(tab);
+              }}
+              onSelectCampaign={(campaign) => setSelectedCampaign(campaign)}
             />
           )}
           {activeTab === 'history' && (
             <HistoryScreen
               user={user}
-              onNavigateToHome={() => setActiveTab('home')}
+              submissions={userSubmissions}
+              onNavigateToHome={() => {
+                setSelectedCampaign(null);
+                setActiveTab('home');
+              }}
             />
           )}
           {activeTab === 'profile' && (
@@ -181,7 +210,13 @@ export const AuthScreen: React.FC = () => {
             />
           )}
         </View>
-        <BottomNavBar currentTab={activeTab} onSelectTab={setActiveTab} />
+        <BottomNavBar
+          currentTab={activeTab}
+          onSelectTab={(tab) => {
+            setSelectedCampaign(null);
+            setActiveTab(tab);
+          }}
+        />
       </SafeAreaView>
     );
   }
