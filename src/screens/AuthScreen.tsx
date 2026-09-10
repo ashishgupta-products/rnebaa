@@ -20,6 +20,12 @@ import {
   performNativeGoogleSignIn,
   performNativeGoogleSignOut,
 } from '../services/nativeAuthService';
+import {
+  syncMobileGoogleWithBackend,
+  getSavedBackendUser,
+  getSavedBackendToken,
+  clearBackendSession,
+} from '../services/backendAuthService';
 import { GOOGLE_AUTH_CONFIG, isPlatformConfigured } from '../config/authConfig';
 
 export const AuthScreen: React.FC = () => {
@@ -36,7 +42,14 @@ export const AuthScreen: React.FC = () => {
       try {
         const savedUser = await getUserSession();
         if (savedUser) {
-          setUser(savedUser);
+          const backendUser = await getSavedBackendUser();
+          const backendToken = await getSavedBackendToken();
+          setUser({
+            ...savedUser,
+            backendUser: backendUser || undefined,
+            backendToken: backendToken || undefined,
+            backendSyncStatus: backendToken ? 'synced' : 'pending',
+          });
         }
       } catch (err) {
         console.warn('Error restoring session:', err);
@@ -63,11 +76,36 @@ export const AuthScreen: React.FC = () => {
         return;
       }
 
-      // Native Google Play Services (SHA-1 verified)
+      // 1. Native Google Play Services (SHA-1 verified)
       const profile = await performNativeGoogleSignIn();
+      profile.backendSyncStatus = profile.idToken ? 'pending' : 'failed';
       await saveUserSession(profile);
       setUser(profile);
       setIsAuthenticating(false);
+
+      // 2. Synchronize idToken with production Next.js backend (earnbyapps.com)
+      if (profile.idToken) {
+        syncMobileGoogleWithBackend(profile.idToken, profile).then(async (backendRes) => {
+          if (backendRes.success && backendRes.user) {
+            const enrichedProfile: UserProfile = {
+              ...profile,
+              backendUser: backendRes.user,
+              backendToken: backendRes.token,
+              backendSyncStatus: 'synced',
+            };
+            await saveUserSession(enrichedProfile);
+            setUser(enrichedProfile);
+          } else {
+            const fallbackProfile: UserProfile = {
+              ...profile,
+              backendSyncStatus: 'failed',
+              backendSyncError: backendRes.error || 'Could not sync with earnbyapps.com',
+            };
+            await saveUserSession(fallbackProfile);
+            setUser(fallbackProfile);
+          }
+        });
+      }
     } catch (err: any) {
       console.log('Sign in error:', err);
       // In Expo Go, native Google Play Services module isn't present
@@ -86,6 +124,7 @@ export const AuthScreen: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await performNativeGoogleSignOut();
+      await clearBackendSession();
     } catch (e) {
       console.log('Signout error:', e);
     }

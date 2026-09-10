@@ -25,6 +25,14 @@ export const GOOGLE_AUTH_CONFIG = {
   scopes: ['profile', 'email'],
 };
 
+export const API_CONFIG = {
+  // Use canonical production URL directly to avoid 308 redirect complications
+  baseUrl: process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.earnbyapps.com',
+  endpoints: {
+    mobileGoogleAuth: '/api/mobile-auth/google',
+  },
+};
+
 /**
  * Checks if credentials exist specifically for the currently active platform
  */

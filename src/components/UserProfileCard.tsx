@@ -19,11 +19,13 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
   user,
   onSignOut,
 }) => {
-  const [showFullToken, setShowFullToken] = useState(false);
-  const [tokenCopiedNotice, setTokenCopiedNotice] = useState(false);
+  const [showFullIdToken, setShowFullIdToken] = useState(false);
+  const [showFullBackendToken, setShowFullBackendToken] = useState(false);
 
   const initial = user.name ? user.name.charAt(0).toUpperCase() : 'U';
-  const hasToken = Boolean(user.idToken);
+  const hasIdToken = Boolean(user.idToken);
+  const hasBackendToken = Boolean(user.backendToken);
+  const isBackendSynced = user.backendSyncStatus === 'synced' && user.backendUser;
 
   return (
     <ScrollView
@@ -49,19 +51,83 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
         <Text style={styles.userName}>{user.name}</Text>
         <Text style={styles.userEmail}>{user.email}</Text>
 
-        {/* Method Badge */}
-        <View style={styles.providerBadge}>
-          <Text style={styles.providerBadgeText}>
-            {Platform.OS === 'android'
-              ? '✓ Native Google Play Services'
-              : '✓ Google Session'}
-          </Text>
+        {/* Sync Status Badge */}
+        <View style={styles.badgesRow}>
+          <View style={styles.providerBadge}>
+            <Text style={styles.providerBadgeText}>
+              ✓ Native Google Play
+            </Text>
+          </View>
+          {isBackendSynced ? (
+            <View style={styles.syncedBadge}>
+              <Text style={styles.syncedBadgeText}>
+                ✓ earnbyapps.com Synced
+              </Text>
+            </View>
+          ) : user.backendSyncStatus === 'pending' ? (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingBadgeText}>
+                ⏳ Syncing Backend...
+              </Text>
+            </View>
+          ) : null}
         </View>
+
+        {/* Backend Database Profile (When Synced) */}
+        {isBackendSynced && (
+          <View style={styles.backendCard}>
+            <View style={styles.backendHeaderRow}>
+              <Text style={styles.backendCardTitle}>🌐 Production Account (earnbyapps.com)</Text>
+              <View style={styles.roleTag}>
+                <Text style={styles.roleTagText}>
+                  {user.backendUser?.role.toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.statsGrid}>
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>Wallet Balance</Text>
+                <Text style={styles.statValue}>
+                  ₹{(user.backendUser?.balance || 0).toFixed(2)}
+                </Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statLabel}>DB User ID</Text>
+                <Text selectable style={styles.statValueSmall}>
+                  #{user.backendUser?.id}
+                </Text>
+              </View>
+            </View>
+
+            {hasBackendToken && (
+              <View style={styles.backendTokenBox}>
+                <View style={styles.tokenHeaderRow}>
+                  <Text style={styles.infoLabel}>EarnByApps Session Token (JWT):</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowFullBackendToken(!showFullBackendToken)}
+                  >
+                    <Text style={styles.expandToggle}>
+                      {showFullBackendToken ? 'Collapse' : 'Expand'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <Text
+                  selectable
+                  numberOfLines={showFullBackendToken ? undefined : 2}
+                  style={styles.tokenText}
+                >
+                  {user.backendToken}
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Developer & Auth Inspection Section */}
         <View style={styles.devSection}>
           <View style={styles.devHeaderRow}>
-            <Text style={styles.devSectionTitle}>🛠️ Auth & Developer Info</Text>
+            <Text style={styles.devSectionTitle}>🛠️ Auth & Developer Inspection</Text>
             <View style={styles.verifiedTag}>
               <Text style={styles.verifiedTagText}>SHA-1 VERIFIED</Text>
             </View>
@@ -69,16 +135,16 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
 
           {/* Login Method Explanation */}
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Auth Method:</Text>
+            <Text style={styles.infoLabel}>Auth Mechanism:</Text>
             <Text style={styles.infoValue}>
-              Native Android Google Play Services (Bottom Sheet API)
+              Native Android Google Play Services (Bottom Sheet)
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Signature Verification:</Text>
+            <Text style={styles.infoLabel}>Keystore SHA-1 Signature:</Text>
             <Text style={styles.infoMonoSmall}>
-              SHA-1: E0:BA:0A:07...86:D6 (com.earnbyapps.app)
+              E0:BA:0A:07...86:D6 (Package: com.earnbyapps.app)
             </Text>
           </View>
 
@@ -90,46 +156,47 @@ export const UserProfileCard: React.FC<UserProfileCardProps> = ({
             </Text>
           </View>
 
-          {/* ID Token Section */}
+          {/* Google ID Token Section */}
           <View style={styles.tokenContainer}>
             <View style={styles.tokenHeaderRow}>
               <Text style={styles.infoLabel}>Google ID Token (JWT):</Text>
-              {hasToken && (
+              {hasIdToken && (
                 <TouchableOpacity
-                  onPress={() => setShowFullToken(!showFullToken)}
+                  onPress={() => setShowFullIdToken(!showFullIdToken)}
                 >
                   <Text style={styles.expandToggle}>
-                    {showFullToken ? 'Collapse' : 'Expand Full'}
+                    {showFullIdToken ? 'Collapse' : 'Expand Full'}
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
 
-            {hasToken ? (
+            {hasIdToken ? (
               <>
                 <Text
                   selectable
-                  numberOfLines={showFullToken ? undefined : 3}
+                  numberOfLines={showFullIdToken ? undefined : 3}
                   style={styles.tokenText}
                 >
                   {user.idToken}
                 </Text>
                 <Text style={styles.tokenHelperText}>
-                  💡 Long press to copy token. Ready to send to your backend (earnbyapps.com) for verification.
+                  💡 Long press to copy token. Sent to earnbyapps.com/api/mobile-auth/google for verification.
                 </Text>
               </>
             ) : (
               <Text style={styles.tokenMissingText}>
-                No ID token received (check webClientId configuration).
+                No ID token received.
               </Text>
             )}
           </View>
 
-          {/* Next.js Backend Verification Info */}
+          {/* Backend API Target */}
           <View style={styles.backendNotice}>
-            <Text style={styles.backendNoticeTitle}>🚀 Next.js Backend Integration:</Text>
+            <Text style={styles.backendNoticeTitle}>🎯 Production Backend API Target:</Text>
             <Text style={styles.backendNoticeBody}>
-              Send this ID Token in POST request header or body to earnbyapps.com. Your Next.js backend verifies it with google-auth-library to issue session cookies/JWT.
+              Endpoint: https://www.earnbyapps.com/api/mobile-auth/google{'\n'}
+              Database: Neon Serverless PostgreSQL (users table)
             </Text>
           </View>
         </View>
@@ -232,17 +299,111 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textAlign: 'center',
   },
+  badgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 18,
+  },
   providerBadge: {
     backgroundColor: '#DCFCE7',
     paddingVertical: 5,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 16,
-    marginBottom: 20,
   },
   providerBadgeText: {
     color: '#15803D',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  syncedBadge: {
+    backgroundColor: '#E0E7FF',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  syncedBadgeText: {
+    color: '#4338CA',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pendingBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  pendingBadgeText: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  backendCard: {
+    width: '100%',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  backendHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  backendCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  roleTag: {
+    backgroundColor: '#DCFCE7',
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+  },
+  roleTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 10,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  statValueSmall: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#0F172A',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  backendTokenBox: {
+    marginTop: 6,
   },
   devSection: {
     width: '100%',
