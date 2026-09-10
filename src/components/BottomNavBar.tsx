@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -50,11 +50,21 @@ interface TabButtonProps {
 }
 
 const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const pressScaleAnim = useRef(new Animated.Value(1)).current;
+  const indicatorAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(indicatorAnim, {
+      toValue: isActive ? 1 : 0,
+      useNativeDriver: true,
+      friction: 7,
+      tension: 60,
+    }).start();
+  }, [isActive]);
 
   const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.90,
+    Animated.spring(pressScaleAnim, {
+      toValue: 0.92,
       useNativeDriver: true,
       speed: 30,
       bounciness: 0,
@@ -62,40 +72,50 @@ const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
   };
 
   const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
+    Animated.spring(pressScaleAnim, {
       toValue: 1,
       friction: 4,
-      tension: 50,
+      tension: 60,
       useNativeDriver: true,
     }).start();
   };
 
   return (
     <TouchableOpacity
-      activeOpacity={0.85}
+      activeOpacity={0.8}
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={styles.tabButton}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: isActive }}
+      accessibilityLabel={item.label}
     >
       <Animated.View
         style={[
           styles.tabContent,
-          isActive && styles.tabContentActive,
-          { transform: [{ scale: scaleAnim }] },
+          { transform: [{ scale: pressScaleAnim }] },
         ]}
       >
-        <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
+        <View style={styles.iconContainer}>
           <Ionicons
             name={isActive ? item.activeIcon : item.inactiveIcon}
-            size={isActive ? 22 : 21}
-            color={isActive ? '#2563EB' : '#64748B'}
+            size={23}
+            color={isActive ? '#2563EB' : '#94A3B8'}
           />
         </View>
         <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
           {item.label}
         </Text>
-        {isActive ? <View style={styles.activeDot} /> : <View style={styles.dotPlaceholder} />}
+        <Animated.View
+          style={[
+            styles.activeIndicator,
+            {
+              opacity: indicatorAnim,
+              transform: [{ scaleX: indicatorAnim }],
+            },
+          ]}
+        />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -134,15 +154,15 @@ const styles = StyleSheet.create({
     ...Platform.select({
       ios: {
         shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 10,
+        elevation: 8,
       },
       web: {
-        boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.04)',
+        boxShadow: '0 -2px 12px rgba(15, 23, 42, 0.04)',
       },
     }),
   },
@@ -161,14 +181,8 @@ const styles = StyleSheet.create({
   tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-  },
-  tabContentActive: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
+    paddingVertical: 2,
+    paddingHorizontal: 12,
   },
   iconContainer: {
     width: 28,
@@ -176,27 +190,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconContainerActive: {},
   tabLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+    fontWeight: '500',
+    color: '#94A3B8',
     marginTop: 2,
     letterSpacing: 0.1,
   },
   tabLabelActive: {
     color: '#2563EB',
-    fontWeight: '800',
+    fontWeight: '700',
   },
-  activeDot: {
-    width: 12,
+  activeIndicator: {
+    width: 14,
     height: 3,
-    borderRadius: 2,
+    borderRadius: 1.5,
     backgroundColor: '#2563EB',
-    marginTop: 3,
-  },
-  dotPlaceholder: {
-    height: 3,
-    marginTop: 3,
+    marginTop: 4,
   },
 });

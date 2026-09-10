@@ -63,7 +63,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <AppLogo size={42} showSparkle />
+          <AppLogo size={40} showSparkle />
           <View style={styles.headerGreetingWrap}>
             <Text style={styles.greetingText}>
               Hello, {user.name.split(' ')[0]} 👋
@@ -73,6 +73,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.headerWalletPill}
+          onPress={() => onNavigateToTab('history')}
+        >
+          <View style={styles.walletIconCircle}>
+            <Ionicons name="wallet-outline" size={13} color="#15803D" />
+          </View>
+          <Text style={styles.headerWalletText}>₹{balance.toFixed(2)}</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -177,22 +188,38 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 12,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.04)',
+      },
+    }),
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   headerGreetingWrap: {
     justifyContent: 'center',
   },
   greetingText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,
@@ -201,7 +228,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
+  },
+  headerWalletPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 20,
+    gap: 6,
+  },
+  walletIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerWalletText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#15803D',
   },
   scrollContent: {
     paddingBottom: 24,
