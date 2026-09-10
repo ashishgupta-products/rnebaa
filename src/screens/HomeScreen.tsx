@@ -146,19 +146,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
                     </View>
                   </View>
 
-                  {item.description ? (
-                    <Text style={styles.cardDescription} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                  ) : null}
-
                   <View style={styles.cardFooter}>
-                    <View style={styles.platformsRow}>
-                      {item.platforms.map((p) => (
-                        <View key={p} style={styles.platformBadge}>
-                          <Text style={styles.platformBadgeText}>{p}</Text>
-                        </View>
-                      ))}
+                    <View style={styles.verifiedTag}>
+                      <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                      <Text style={styles.verifiedTagText}>Verified Offer</Text>
                     </View>
 
                     <View style={styles.startTaskButton}>
@@ -296,12 +287,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#15803D',
   },
-  cardDescription: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: 12,
-  },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -310,20 +295,21 @@ const styles = StyleSheet.create({
     borderTopColor: '#F1F5F9',
     paddingTop: 12,
   },
-  platformsRow: {
+  verifiedTag: {
     flexDirection: 'row',
-    gap: 6,
-  },
-  platformBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    paddingVertical: 4,
+    paddingHorizontal: 9,
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
   },
-  platformBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748B',
+  verifiedTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
   },
   startTaskButton: {
     flexDirection: 'row',
