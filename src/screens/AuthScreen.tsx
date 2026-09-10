@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   StatusBar,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { BottomNavBar } from '../components/BottomNavBar';
@@ -138,6 +139,13 @@ export const AuthScreen: React.FC = () => {
     setActiveTab('home');
   };
 
+  const handleSkipLogin = async () => {
+    const demoUser = getDemoUserProfile();
+    await saveUserSession(demoUser);
+    setUser(demoUser);
+    setActiveTab('home');
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -206,6 +214,17 @@ export const AuthScreen: React.FC = () => {
               isLoading={isAuthenticating}
             />
           </View>
+
+          {/* Skip Login / Preview Mode Button */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.skipButton}
+            onPress={handleSkipLogin}
+          >
+            <Text style={styles.skipButtonText}>
+              Skip Login (Explore App Preview) →
+            </Text>
+          </TouchableOpacity>
 
           {/* Platform info */}
           <View style={styles.infoBadge}>
@@ -296,7 +315,20 @@ const styles = StyleSheet.create({
   buttonWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 12,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  skipButtonText: {
+    fontSize: 13,
+    color: '#2563EB',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   errorBox: {
     backgroundColor: '#FEE2E2',

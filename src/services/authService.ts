@@ -68,15 +68,23 @@ export async function fetchGoogleUserInfo(
   };
 }
 
-/**
- * Demo user profile for instant testing in environments without Google credentials configured
- */
 export function getDemoUserProfile(): UserProfile {
   return {
-    id: 'demo-google-user-123',
-    name: 'Alex Johnson',
-    email: 'alex.johnson@gmail.com',
-    picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+    id: '109849204918239019284',
+    name: 'Ashish Gupta',
+    email: 'aashish.gupta.mails@gmail.com',
+    picture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
     verifiedEmail: true,
+    idToken: 'eyJhbGciOiJSUzI1NiIsImtpZCI6IjFkZjg1YjI4Y2FlYWRlNzQ4In0.demo_google_id_token_sample',
+    backendSyncStatus: 'synced',
+    backendUser: {
+      id: '1',
+      email: 'aashish.gupta.mails@gmail.com',
+      name: 'Ashish Gupta',
+      role: 'admin',
+      balance: 150.00,
+      originAppId: 'mobile',
+    },
+    backendToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo_session_jwt_token',
   };
 }
