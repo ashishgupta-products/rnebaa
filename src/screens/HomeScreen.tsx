@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectCampaign,
 }) => {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -52,22 +51,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     setCampaigns(data);
     setRefreshing(false);
   };
-
-  // Dynamically extract real categories from live database campaigns
-  const categories = useMemo(() => {
-    const set = new Set<string>();
-    campaigns.forEach((c) => {
-      if (c.category && c.category.trim()) {
-        set.add(c.category.trim());
-      }
-    });
-    return ['All', ...Array.from(set)];
-  }, [campaigns]);
-
-  const filteredCampaigns = campaigns.filter((c) => {
-    if (selectedCategory === 'All') return true;
-    return c.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
-  });
 
   const handleOpenCampaign = (url?: string) => {
     if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
@@ -99,37 +82,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Category Filters */}
-        <View style={styles.categoriesSection}>
+        {/* Section Header */}
+        <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>All Offers!</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesScroll}
-          >
-            {categories.map((cat) => {
-              const active = selectedCategory === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setSelectedCategory(cat)}
-                  style={[
-                    styles.categoryChip,
-                    active && styles.categoryChipActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.categoryChipText,
-                      active && styles.categoryChipTextActive,
-                    ]}
-                  >
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
         </View>
 
         {/* Loading State */}
@@ -138,16 +93,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             <ActivityIndicator size="large" color="#2563EB" />
             <Text style={styles.loadingText}>Fetching offers from database...</Text>
           </View>
-        ) : filteredCampaigns.length === 0 ? (
+        ) : campaigns.length === 0 ? (
           <View style={styles.emptyBox}>
             <View style={styles.emptyIconCircle}>
               <Ionicons name="folder-open-outline" size={36} color="#94A3B8" />
             </View>
-            <Text style={styles.emptyTitle}>No Tasks Available</Text>
+            <Text style={styles.emptyTitle}>No Offers Available</Text>
             <Text style={styles.emptySubtitle}>
-              {selectedCategory === 'All'
-                ? 'No active offers are currently open in the database. Check back soon!'
-                : `No tasks found under "${selectedCategory}". Try selecting another category.`}
+              No active offers are currently open in the database. Check back soon!
             </Text>
             <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
               <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
@@ -157,7 +110,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         ) : (
           /* Live Campaigns List */
           <View style={styles.campaignsList}>
-            {filteredCampaigns.map((item) => {
+            {campaigns.map((item) => {
               const initialLetter = item.name.charAt(0).toUpperCase();
               const hasValidLogo =
                 item.logoUrl &&
@@ -262,41 +215,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 24,
   },
-  categoriesSection: {
-    marginTop: 14,
+  sectionHeader: {
+    paddingHorizontal: 20,
+    marginTop: 18,
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
-    paddingHorizontal: 16,
-    marginBottom: 10,
-  },
-  categoriesScroll: {
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  categoryChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  categoryChipActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
-  },
-  categoryChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  categoryChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    letterSpacing: -0.3,
   },
   campaignsList: {
     paddingHorizontal: 16,
