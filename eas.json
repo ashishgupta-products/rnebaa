@@ -29,6 +29,7 @@
       }
     },
     "production-apk": {
+      "distribution": "internal",
       "env": {
         "REACT_NATIVE_ARCHITECTURES": "arm64-v8a"
       },
