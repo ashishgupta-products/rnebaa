@@ -8,7 +8,11 @@ import {
   Platform,
 } from 'react-native';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
-import { UserProfileCard } from '../components/UserProfileCard';
+import { BottomNavBar } from '../components/BottomNavBar';
+import { HomeScreen } from './HomeScreen';
+import { HistoryScreen } from './HistoryScreen';
+import { ProfileScreen } from './ProfileScreen';
+import { TabType } from '../types/navigation';
 import { UserProfile } from '../types/auth';
 import {
   saveUserSession,
@@ -30,6 +34,7 @@ import { GOOGLE_AUTH_CONFIG, isPlatformConfigured } from '../config/authConfig';
 
 export const AuthScreen: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('home');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuthenticating, setIsAuthenticating] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -130,6 +135,7 @@ export const AuthScreen: React.FC = () => {
     }
     await clearUserSession();
     setUser(null);
+    setActiveTab('home');
   };
 
   if (isLoading) {
@@ -142,47 +148,74 @@ export const AuthScreen: React.FC = () => {
     );
   }
 
+  // If user is authenticated, render the main app experience with bottom navigation
+  if (user) {
+    return (
+      <SafeAreaView style={styles.mainContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+        <View style={styles.screenContainer}>
+          {activeTab === 'home' && (
+            <HomeScreen
+              user={user}
+              onNavigateToTab={(tab) => setActiveTab(tab)}
+            />
+          )}
+          {activeTab === 'history' && (
+            <HistoryScreen
+              user={user}
+              onNavigateToHome={() => setActiveTab('home')}
+            />
+          )}
+          {activeTab === 'profile' && (
+            <ProfileScreen
+              user={user}
+              onSignOut={handleSignOut}
+            />
+          )}
+        </View>
+        <BottomNavBar currentTab={activeTab} onSelectTab={setActiveTab} />
+      </SafeAreaView>
+    );
+  }
+
+  // Not logged in: Show Google sign-in gateway
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={[styles.content, user && styles.contentLoggedIn]}>
-        {user ? (
-          <UserProfileCard user={user} onSignOut={handleSignOut} />
-        ) : (
-          <View style={styles.signInCard}>
-            {/* App Branding */}
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoBadgeText}>E</Text>
-            </View>
-
-            <Text style={styles.title}>EarnByApps</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
-
-            {/* Error Display */}
-            {errorMessage ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-
-            {/* Continue with Google Button */}
-            <View style={styles.buttonWrapper}>
-              <GoogleSignInButton
-                onPress={handleGoogleSignIn}
-                isLoading={isAuthenticating}
-              />
-            </View>
-
-            {/* Platform info */}
-            <View style={styles.infoBadge}>
-              <Text style={styles.infoBadgeText}>
-                {Platform.OS === 'android'
-                  ? 'Native Google Play Services (SHA-1 verified)'
-                  : 'Web Preview Mode'}
-              </Text>
-            </View>
+      <View style={styles.content}>
+        <View style={styles.signInCard}>
+          {/* App Branding */}
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoBadgeText}>E</Text>
           </View>
-        )}
+
+          <Text style={styles.title}>EarnByApps</Text>
+          <Text style={styles.subtitle}>Sign in to continue</Text>
+
+          {/* Error Display */}
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
+
+          {/* Continue with Google Button */}
+          <View style={styles.buttonWrapper}>
+            <GoogleSignInButton
+              onPress={handleGoogleSignIn}
+              isLoading={isAuthenticating}
+            />
+          </View>
+
+          {/* Platform info */}
+          <View style={styles.infoBadge}>
+            <Text style={styles.infoBadgeText}>
+              {Platform.OS === 'android'
+                ? 'Native Google Play Services (SHA-1 verified)'
+                : 'Web Preview Mode'}
+            </Text>
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -193,15 +226,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
+  mainContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  screenContainer: {
+    flex: 1,
+  },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
-  },
-  contentLoggedIn: {
-    justifyContent: 'flex-start',
-    paddingHorizontal: 12,
   },
   loadingContainer: {
     flex: 1,
