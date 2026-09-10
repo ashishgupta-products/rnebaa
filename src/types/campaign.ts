@@ -14,6 +14,8 @@ export interface Campaign {
   currencySymbol?: string;
   logoUrl?: string;
   referralCode?: string;
+  actionText?: string;
+  videoUrl?: string;
   isActive?: boolean;
 }
 
@@ -24,4 +26,6 @@ export interface TaskHistoryItem {
   status: 'Pending' | 'Paid' | 'Rejected';
   date: string;
   proofType?: string;
+  proofUrl?: string;
+  appId?: string;
 }

@@ -51,27 +51,26 @@ export const GoogleSignInButton: React.FC<GoogleSignInButtonProps> = ({
 const styles = StyleSheet.create({
   button: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: '#DADCE0',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
     width: '100%',
-    maxWidth: 320,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
+        shadowOffset: { width: 0, height: 3 },
         shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowRadius: 6,
       },
       android: {
         elevation: 2,
       },
       web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
         cursor: 'pointer',
         transition: 'all 0.2s ease',
       },
@@ -79,7 +78,7 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-    borderColor: '#E0E0E0',
+    borderColor: '#E2E8F0',
   },
   contentContainer: {
     flexDirection: 'row',

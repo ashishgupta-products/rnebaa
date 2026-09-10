@@ -1,47 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../types/auth';
 import { TaskHistoryItem } from '../types/campaign';
+import { fetchUserSubmissions } from '../services/submissionService';
 
 interface HistoryScreenProps {
   user: UserProfile;
   onNavigateToHome: () => void;
   submissions?: TaskHistoryItem[];
 }
-
-const SAMPLE_HISTORY: TaskHistoryItem[] = [
-  {
-    id: 'h-1',
-    appName: 'Hopr App Installation & 3 Rides',
-    reward: 300,
-    status: 'Pending',
-    date: 'Today, 12:30 PM',
-    proofType: 'Account ID / Username',
-  },
-  {
-    id: 'h-2',
-    appName: 'Google Pay UPI First Transaction',
-    reward: 51,
-    status: 'Paid',
-    date: 'Yesterday, 04:15 PM',
-    proofType: 'Screenshot',
-  },
-  {
-    id: 'h-3',
-    appName: 'Groww Demat KYC Verification',
-    reward: 100,
-    status: 'Paid',
-    date: '08 Sep 2026',
-    proofType: 'Account ID',
-  },
-];
 
 const STATUS_FILTERS = ['All', 'Paid', 'Pending', 'Rejected'];
 
@@ -51,15 +26,41 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   submissions,
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
-  const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(
-    submissions && submissions.length > 0 ? submissions : SAMPLE_HISTORY
-  );
+  const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(submissions || []);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  React.useEffect(() => {
+  const loadSubmissions = async () => {
+    try {
+      const live = await fetchUserSubmissions(user.email);
+      // Merge live with any newly submitted items in local state
+      setHistoryItems(live);
+    } catch (e) {
+      console.warn('Could not load user submissions:', e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSubmissions();
+  }, [user.email]);
+
+  useEffect(() => {
     if (submissions && submissions.length > 0) {
-      setHistoryItems(submissions);
+      setHistoryItems((prev) => {
+        const ids = new Set(prev.map((p) => p.id));
+        const newItems = submissions.filter((s) => !ids.has(s.id));
+        return [...newItems, ...prev];
+      });
     }
   }, [submissions]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadSubmissions();
+  };
 
   const balance = user.backendUser?.balance || 0;
   const paidCount = historyItems.filter((i) => i.status === 'Paid').length;
@@ -96,6 +97,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         {/* Summary Stat Cards */}
         <View style={styles.statsRow}>

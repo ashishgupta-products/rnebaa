@@ -9,6 +9,16 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "REACT_NATIVE_ARCHITECTURES": "arm64-v8a"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
+      }
+    },
+    "preview-universal": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
@@ -16,6 +26,15 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      }
+    },
+    "production-apk": {
+      "env": {
+        "REACT_NATIVE_ARCHITECTURES": "arm64-v8a"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a"
       }
     }
   },

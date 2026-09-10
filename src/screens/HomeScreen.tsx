@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
   RefreshControl,
   Linking,
   Platform,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AppLogo } from '../components/AppLogo';
 import { UserProfile } from '../types/auth';
 import { Campaign } from '../types/campaign';
 import { fetchLiveCampaigns } from '../services/campaignService';
@@ -19,8 +22,6 @@ interface HomeScreenProps {
   onNavigateToTab: (tab: 'history' | 'profile') => void;
   onSelectCampaign: (campaign: Campaign) => void;
 }
-
-const CATEGORIES = ['All', 'App Install', 'Finance', 'Gaming'];
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   user,
@@ -35,6 +36,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const balance = user.backendUser?.balance || 0;
 
   const loadData = async () => {
+    setLoading(true);
     const data = await fetchLiveCampaigns();
     setCampaigns(data);
     setLoading(false);
@@ -46,13 +48,25 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
+    const data = await fetchLiveCampaigns();
+    setCampaigns(data);
     setRefreshing(false);
   };
 
+  // Dynamically extract real categories from live database campaigns
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    campaigns.forEach((c) => {
+      if (c.category && c.category.trim()) {
+        set.add(c.category.trim());
+      }
+    });
+    return ['All', ...Array.from(set)];
+  }, [campaigns]);
+
   const filteredCampaigns = campaigns.filter((c) => {
     if (selectedCategory === 'All') return true;
-    return c.category.toLowerCase().includes(selectedCategory.toLowerCase());
+    return c.category.trim().toLowerCase() === selectedCategory.trim().toLowerCase();
   });
 
   const handleOpenCampaign = (url?: string) => {
@@ -66,13 +80,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.appLogoBadge}>
-            <Text style={styles.appLogoText}>E</Text>
-          </View>
+          <AppLogo size={38} />
           <View>
             <Text style={styles.brandTitle}>EarnByApps</Text>
             <Text style={styles.greetingText}>
-              Hi, {user.name.split(' ')[0]} 👋
+              Hello, {user.name.split(' ')[0]}
             </Text>
           </View>
         </View>
@@ -95,33 +107,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Hero Banner */}
-        <View style={styles.heroBanner}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>⚡ INSTANT PAYOUTS</Text>
-          </View>
-          <Text style={styles.heroTitle}>Test Apps, Earn Real Cash</Text>
-          <Text style={styles.heroSubtitle}>
-            Complete easy tasks, review apps, and receive instant cash via UPI or bank transfer.
-          </Text>
-          <View style={styles.heroStatsRow}>
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatNumber}>₹300+</Text>
-              <Text style={styles.heroStatLabel}>Max reward/app</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatNumber}>100%</Text>
-              <Text style={styles.heroStatLabel}>Verified offers</Text>
-            </View>
-            <View style={styles.heroDivider} />
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatNumber}>UPI / Bank</Text>
-              <Text style={styles.heroStatLabel}>Fast withdrawal</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Category Filters */}
         <View style={styles.categoriesSection}>
           <Text style={styles.sectionTitle}>Available Tasks</Text>
@@ -130,7 +115,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoriesScroll}
           >
-            {CATEGORIES.map((cat) => {
+            {categories.map((cat) => {
               const active = selectedCategory === cat;
               return (
                 <TouchableOpacity
@@ -155,56 +140,94 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </ScrollView>
         </View>
 
-        {/* Campaigns List */}
-        <View style={styles.campaignsList}>
-          {filteredCampaigns.map((item) => {
-            const initialLetter = item.name.charAt(0).toUpperCase();
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                style={styles.campaignCard}
-                onPress={() => onSelectCampaign(item)}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardIconBox}>
-                    <Text style={styles.cardIconText}>{initialLetter}</Text>
+        {/* Loading State */}
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#2563EB" />
+            <Text style={styles.loadingText}>Fetching available tasks from database...</Text>
+          </View>
+        ) : filteredCampaigns.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <View style={styles.emptyIconCircle}>
+              <Ionicons name="folder-open-outline" size={36} color="#94A3B8" />
+            </View>
+            <Text style={styles.emptyTitle}>No Tasks Available</Text>
+            <Text style={styles.emptySubtitle}>
+              {selectedCategory === 'All'
+                ? 'No active offers are currently open in the database. Check back soon!'
+                : `No tasks found under "${selectedCategory}". Try selecting another category.`}
+            </Text>
+            <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
+              <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.refreshButtonText}>Refresh Offers</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          /* Live Campaigns List */
+          <View style={styles.campaignsList}>
+            {filteredCampaigns.map((item) => {
+              const initialLetter = item.name.charAt(0).toUpperCase();
+              const hasValidLogo =
+                item.logoUrl &&
+                (item.logoUrl.startsWith('http://') || item.logoUrl.startsWith('https://'));
+
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  activeOpacity={0.9}
+                  style={styles.campaignCard}
+                  onPress={() => onSelectCampaign(item)}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardIconBox}>
+                      {hasValidLogo ? (
+                        <Image
+                          source={{ uri: item.logoUrl }}
+                          style={styles.cardLogoImg}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Text style={styles.cardIconText}>{initialLetter}</Text>
+                      )}
+                    </View>
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.cardTitle}>{item.name}</Text>
+                      <Text style={styles.cardCategory}>{item.category}</Text>
+                    </View>
+                    <View style={styles.rewardBadge}>
+                      <Text style={styles.rewardText}>
+                        +{item.currencySymbol || '₹'}{item.reward}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardCategory}>{item.category}</Text>
-                  </View>
-                  <View style={styles.rewardBadge}>
-                    <Text style={styles.rewardText}>
-                      +{item.currencySymbol || '₹'}{item.reward}
+
+                  {item.description ? (
+                    <Text style={styles.cardDescription} numberOfLines={2}>
+                      {item.description}
                     </Text>
-                  </View>
-                </View>
+                  ) : null}
 
-                {item.description ? (
-                  <Text style={styles.cardDescription} numberOfLines={2}>
-                    {item.description}
-                  </Text>
-                ) : null}
+                  <View style={styles.cardFooter}>
+                    <View style={styles.platformsRow}>
+                      {item.platforms.map((p) => (
+                        <View key={p} style={styles.platformBadge}>
+                          <Text style={styles.platformBadgeText}>{p}</Text>
+                        </View>
+                      ))}
+                    </View>
 
-                <View style={styles.cardFooter}>
-                  <View style={styles.platformsRow}>
-                    {item.platforms.map((p) => (
-                      <View key={p} style={styles.platformBadge}>
-                        <Text style={styles.platformBadgeText}>{p}</Text>
-                      </View>
-                    ))}
+                    <View style={styles.startTaskButton}>
+                      <Text style={styles.startTaskButtonText}>
+                        {item.actionText || 'View Task'}
+                      </Text>
+                      <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+                    </View>
                   </View>
-
-                  <View style={styles.startTaskButton}>
-                    <Text style={styles.startTaskButtonText}>View Task</Text>
-                    <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -271,82 +294,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 24,
   },
-  heroBanner: {
-    margin: 16,
-    padding: 20,
-    borderRadius: 20,
-    backgroundColor: '#1E293B',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
-      },
-    }),
-  },
-  heroBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    marginBottom: 10,
-  },
-  heroBadgeText: {
-    color: '#38BDF8',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 6,
-    letterSpacing: -0.3,
-  },
-  heroSubtitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  heroStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    padding: 12,
-    borderRadius: 14,
-  },
-  heroStatItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  heroStatNumber: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  heroStatLabel: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginTop: 2,
-  },
-  heroDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
   categoriesSection: {
-    marginTop: 4,
+    marginTop: 14,
     marginBottom: 12,
   },
   sectionTitle: {
@@ -490,6 +439,68 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   startTaskButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cardLogoImg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+  },
+  loadingBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  emptyBox: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+  },
+  refreshButtonText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',

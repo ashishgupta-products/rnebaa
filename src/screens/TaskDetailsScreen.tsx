@@ -8,13 +8,19 @@ import {
   TextInput,
   Linking,
   Platform,
+  ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Campaign, TaskHistoryItem } from '../types/campaign';
+import { submitTaskProof, uploadProofImageToCloudinary } from '../services/submissionService';
 
 interface TaskDetailsScreenProps {
   campaign: Campaign;
   userBalance?: number;
+  userName?: string;
+  userEmail?: string;
   isAlreadySubmitted?: boolean;
   onBack: () => void;
   onSubmitProof: (item: TaskHistoryItem) => void;
@@ -23,6 +29,8 @@ interface TaskDetailsScreenProps {
 export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   campaign,
   userBalance = 0,
+  userName = 'User',
+  userEmail = '',
   isAlreadySubmitted = false,
   onBack,
   onSubmitProof,
@@ -30,8 +38,11 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   const [copied, setCopied] = useState<boolean>(false);
   const [proofText, setProofText] = useState<string>('');
   const [proofType, setProofType] = useState<string>('Account ID / Username');
+  const [selectedImage, setSelectedImage] = useState<{ uri: string; mimeType?: string } | null>(null);
   const [hasStarted, setHasStarted] = useState<boolean>(false);
   const [submitted, setSubmitted] = useState<boolean>(isAlreadySubmitted);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [uploadProgressText, setUploadProgressText] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const initialLetter = campaign.name.charAt(0).toUpperCase();
@@ -51,24 +62,89 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
     }
   };
 
-  const handleSubmit = () => {
-    if (!proofText.trim()) {
-      setErrorMsg('Please enter your proof details (e.g. registered email or account ID)');
+  const handlePickImage = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        setErrorMsg('Gallery permission is needed to attach a proof screenshot.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setSelectedImage({
+          uri: asset.uri,
+          mimeType: asset.mimeType || 'image/jpeg',
+        });
+        setErrorMsg(null);
+      }
+    } catch (err: any) {
+      console.warn('Image picker error:', err);
+      setErrorMsg('Could not open image picker.');
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!proofText.trim() && !selectedImage) {
+      setErrorMsg('Please attach a proof screenshot or enter your account details.');
       return;
     }
 
     setErrorMsg(null);
-    const newSubmission: TaskHistoryItem = {
-      id: `task-${Date.now()}`,
-      appName: campaign.name,
-      reward: campaign.reward,
-      status: 'Pending',
-      date: 'Just now',
-      proofType,
-    };
+    setIsSubmitting(true);
+    setUploadProgressText('Processing submission...');
 
-    onSubmitProof(newSubmission);
-    setSubmitted(true);
+    try {
+      let uploadedUrl: string | undefined = undefined;
+      let uploadedPublicId: string = proofText.trim() || 'mobile_proof';
+
+      // 1. Upload screenshot to Cloudinary via backend /api/upload
+      if (selectedImage) {
+        setUploadProgressText('Uploading screenshot to Cloudinary...');
+        const uploadRes = await uploadProofImageToCloudinary(
+          selectedImage.uri,
+          selectedImage.mimeType
+        );
+
+        if (!uploadRes.success || !uploadRes.url) {
+          throw new Error(uploadRes.error || 'Failed to upload screenshot to Cloudinary');
+        }
+
+        uploadedUrl = uploadRes.url;
+        uploadedPublicId = uploadRes.publicId || uploadedPublicId;
+      }
+
+      // 2. Persist submission record with Cloudinary URL in Neon PostgreSQL database
+      setUploadProgressText('Saving submission to database...');
+      const res = await submitTaskProof({
+        userName,
+        userEmail,
+        appName: campaign.name,
+        appId: campaign.id,
+        reward: campaign.reward,
+        proof: uploadedPublicId,
+        proofType: uploadedUrl ? 'image' : 'text',
+        proofUrl: uploadedUrl,
+      });
+
+      if (res.success && res.item) {
+        onSubmitProof(res.item);
+        setSubmitted(true);
+      } else {
+        setErrorMsg(res.error || 'Could not submit proof. Please try again.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error submitting proof to server.');
+    } finally {
+      setIsSubmitting(false);
+      setUploadProgressText('');
+    }
   };
 
   return (
@@ -256,7 +332,48 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
               </View>
             ) : null}
 
-            <Text style={styles.inputLabel}>Proof Details (Username / Phone / Account ID):</Text>
+            {/* Screenshot Upload Zone */}
+            <Text style={styles.inputLabel}>Screenshot Proof (Uploads to Cloudinary):</Text>
+            {selectedImage ? (
+              <View style={styles.imagePreviewContainer}>
+                <Image
+                  source={{ uri: selectedImage.uri }}
+                  style={styles.imagePreview}
+                  resizeMode="cover"
+                />
+                <View style={styles.imageOverlay}>
+                  <View style={styles.attachedBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#15803D" />
+                    <Text style={styles.attachedText}>Screenshot Attached</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeImageButton}
+                    onPress={() => setSelectedImage(null)}
+                  >
+                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                    <Text style={styles.removeImageText}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.uploadDottedBox}
+                onPress={handlePickImage}
+              >
+                <View style={styles.uploadIconCircle}>
+                  <Ionicons name="cloud-upload-outline" size={24} color="#2563EB" />
+                </View>
+                <Text style={styles.uploadPromptText}>Attach Completion Screenshot</Text>
+                <Text style={styles.uploadSubPromptText}>
+                  Tap to upload proof image directly to Cloudinary
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={[styles.inputLabel, { marginTop: 14 }]}>
+              Proof Details / Notes (Username / Phone / Account ID):
+            </Text>
             <TextInput
               style={styles.textInput}
               placeholder="e.g. Registered Email, User ID, or Phone..."
@@ -268,12 +385,22 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
 
             <TouchableOpacity
               activeOpacity={0.8}
-              style={styles.submitButton}
+              style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
               onPress={handleSubmit}
+              disabled={isSubmitting}
             >
-              <Text style={styles.submitButtonText}>
-                Submit Proof for ₹{campaign.reward.toFixed(2)}
-              </Text>
+              {isSubmitting ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.submitButtonText}>
+                    {uploadProgressText || 'Submitting...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>
+                  Submit Proof for ₹{campaign.reward.toFixed(2)}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -689,5 +816,82 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  uploadDottedBox: {
+    borderWidth: 1.5,
+    borderColor: '#93C5FD',
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  uploadIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  uploadPromptText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E40AF',
+    marginBottom: 2,
+  },
+  uploadSubPromptText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  imagePreviewContainer: {
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 8,
+  },
+  imagePreview: {
+    width: '100%',
+    height: 180,
+  },
+  imageOverlay: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  attachedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  attachedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  removeImageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+  },
+  removeImageText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });
