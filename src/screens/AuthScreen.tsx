@@ -106,7 +106,7 @@ export const AuthScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
-      <View style={styles.content}>
+      <View style={[styles.content, user && styles.contentLoggedIn]}>
         {user ? (
           <UserProfileCard user={user} onSignOut={handleSignOut} />
         ) : (
@@ -159,6 +159,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+  },
+  contentLoggedIn: {
+    justifyContent: 'flex-start',
+    paddingHorizontal: 12,
   },
   loadingContainer: {
     flex: 1,
