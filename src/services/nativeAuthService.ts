@@ -18,7 +18,6 @@ export function initNativeGoogle() {
   try {
     GoogleSignin.configure({
       webClientId: GOOGLE_AUTH_CONFIG.webClientId || undefined,
-      offlineAccess: true,
     });
     configured = true;
   } catch (err) {
