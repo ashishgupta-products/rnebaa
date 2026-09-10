@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { TabType } from '../types/navigation';
@@ -42,6 +43,64 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+interface TabButtonProps {
+  item: NavItem;
+  isActive: boolean;
+  onPress: () => void;
+}
+
+const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.90,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 0,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      friction: 4,
+      tension: 50,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={styles.tabButton}
+    >
+      <Animated.View
+        style={[
+          styles.tabContent,
+          isActive && styles.tabContentActive,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
+        <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
+          <Ionicons
+            name={isActive ? item.activeIcon : item.inactiveIcon}
+            size={isActive ? 22 : 21}
+            color={isActive ? '#2563EB' : '#64748B'}
+          />
+        </View>
+        <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+          {item.label}
+        </Text>
+        {isActive ? <View style={styles.activeDot} /> : <View style={styles.dotPlaceholder} />}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   currentTab,
   onSelectTab,
@@ -52,23 +111,12 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         {NAV_ITEMS.map((item) => {
           const isActive = currentTab === item.id;
           return (
-            <TouchableOpacity
+            <TabButton
               key={item.id}
-              activeOpacity={0.7}
+              item={item}
+              isActive={isActive}
               onPress={() => onSelectTab(item.id)}
-              style={[styles.tabButton, isActive && styles.tabButtonActive]}
-            >
-              <View style={[styles.iconWrapper, isActive && styles.iconWrapperActive]}>
-                <Ionicons
-                  name={isActive ? item.activeIcon : item.inactiveIcon}
-                  size={22}
-                  color={isActive ? '#2563EB' : '#64748B'}
-                />
-              </View>
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
+            />
           );
         })}
       </View>
@@ -80,21 +128,21 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#F1F5F9',
     paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -3 },
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: -4 },
         shadowOpacity: 0.05,
-        shadowRadius: 6,
+        shadowRadius: 12,
       },
       android: {
-        elevation: 8,
+        elevation: 10,
       },
       web: {
-        boxShadow: '0 -3px 12px rgba(0,0,0,0.05)',
+        boxShadow: '0 -4px 16px rgba(15, 23, 42, 0.04)',
       },
     }),
   },
@@ -102,33 +150,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
-  tabButtonActive: {},
-  iconWrapper: {
-    width: 40,
-    height: 30,
+  tabContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 15,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    borderRadius: 16,
   },
-  iconWrapperActive: {
+  tabContentActive: {
     backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
   },
+  iconContainer: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconContainerActive: {},
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
     marginTop: 2,
+    letterSpacing: 0.1,
   },
   tabLabelActive: {
     color: '#2563EB',
-    fontWeight: '700',
+    fontWeight: '800',
+  },
+  activeDot: {
+    width: 12,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#2563EB',
+    marginTop: 3,
+  },
+  dotPlaceholder: {
+    height: 3,
+    marginTop: 3,
   },
 });

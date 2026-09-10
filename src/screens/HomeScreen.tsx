@@ -80,24 +80,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {/* Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <AppLogo size={38} />
-          <View>
-            <Text style={styles.brandTitle}>EarnByApps</Text>
+          <AppLogo size={42} showSparkle />
+          <View style={styles.headerGreetingWrap}>
             <Text style={styles.greetingText}>
-              Hello, {user.name.split(' ')[0]}
+              Hello, {user.name.split(' ')[0]} 👋
+            </Text>
+            <Text style={styles.greetingSubText}>
+              Ready to earn today?
             </Text>
           </View>
         </View>
-
-        {/* Wallet Pill Button */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.walletPill}
-          onPress={() => onNavigateToTab('profile')}
-        >
-          <Ionicons name="wallet-outline" size={16} color="#15803D" />
-          <Text style={styles.walletAmount}>₹{balance.toFixed(2)}</Text>
-        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -240,56 +232,32 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F1F5F9',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  appLogoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
+  headerGreetingWrap: {
     justifyContent: 'center',
   },
-  appLogoText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  brandTitle: {
-    fontSize: 16,
+  greetingText: {
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
   },
-  greetingText: {
+  greetingSubText: {
     fontSize: 12,
+    fontWeight: '500',
     color: '#64748B',
-  },
-  walletPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  walletAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#15803D',
+    marginTop: 2,
   },
   scrollContent: {
     paddingBottom: 24,

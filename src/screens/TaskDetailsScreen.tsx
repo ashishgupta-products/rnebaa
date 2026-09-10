@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  BackHandler,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -44,6 +46,41 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [uploadProgressText, setUploadProgressText] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Intercept Android hardware back button and system back swipe gestures
+  useEffect(() => {
+    const handleBackPress = () => {
+      onBack();
+      return true; // Prevents default exit behavior (closing the app)
+    };
+
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress
+    );
+
+    return () => backSubscription.remove();
+  }, [onBack]);
+
+  // Touch gesture responder to detect left-edge swipe to go back
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Detect horizontal rightward swipe originating from the left screen edge (within 70px)
+        return (
+          evt.nativeEvent.pageX < 70 &&
+          gestureState.dx > 25 &&
+          Math.abs(gestureState.dy) < 35
+        );
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dx > 50 || gestureState.vx > 0.3) {
+          onBack();
+        }
+      },
+    })
+  ).current;
 
   const initialLetter = campaign.name.charAt(0).toUpperCase();
 
@@ -148,7 +185,7 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...panResponder.panHandlers}>
       {/* Top App Bar */}
       <View style={styles.header}>
         <TouchableOpacity

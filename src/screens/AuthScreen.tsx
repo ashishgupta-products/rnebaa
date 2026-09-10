@@ -8,6 +8,7 @@ import {
   Platform,
   TouchableOpacity,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppLogo } from '../components/AppLogo';
@@ -72,6 +73,28 @@ export const AuthScreen: React.FC = () => {
     }
     loadSavedSession();
   }, []);
+
+  // Global Android hardware back button and swipe gesture interceptor
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectedCampaign) {
+        setSelectedCampaign(null);
+        return true; // Stay inside app, navigate back to Home
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return true; // Stay inside app, navigate back to Home tab
+      }
+      return false; // On root home tab, default back exits/minimizes app
+    };
+
+    const backSubscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onBackPress
+    );
+
+    return () => backSubscription.remove();
+  }, [selectedCampaign, activeTab]);
 
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
