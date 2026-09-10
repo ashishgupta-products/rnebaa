@@ -101,7 +101,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       >
         {/* Category Filters */}
         <View style={styles.categoriesSection}>
-          <Text style={styles.sectionTitle}>Available Tasks</Text>
+          <Text style={styles.sectionTitle}>All Offers!</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -136,7 +136,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         {loading ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.loadingText}>Fetching available tasks from database...</Text>
+            <Text style={styles.loadingText}>Fetching offers from database...</Text>
           </View>
         ) : filteredCampaigns.length === 0 ? (
           <View style={styles.emptyBox}>

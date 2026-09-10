@@ -164,7 +164,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
                 style={styles.exploreButton}
                 onPress={onNavigateToHome}
               >
-                <Text style={styles.exploreButtonText}>Browse Available Tasks</Text>
+                <Text style={styles.exploreButtonText}>Browse All Offers</Text>
               </TouchableOpacity>
             </View>
           ) : (
