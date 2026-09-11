@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { API_CONFIG } from '../config/authConfig';
 import { TaskHistoryItem } from '../types/campaign';
+import { getSavedBackendToken } from './backendAuthService';
 
 /**
  * Service to interact with the live production submissions and upload APIs (earnbyapps.com).
@@ -8,8 +9,18 @@ import { TaskHistoryItem } from '../types/campaign';
  */
 export async function fetchUserSubmissions(userEmail?: string): Promise<TaskHistoryItem[]> {
   try {
-    const res = await fetch(`${API_CONFIG.baseUrl}/api/submissions`, {
-      headers: { Accept: 'application/json' },
+    const token = await getSavedBackendToken();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const url = userEmail
+      ? `${API_CONFIG.baseUrl}/api/submissions?userEmail=${encodeURIComponent(userEmail.trim())}`
+      : `${API_CONFIG.baseUrl}/api/submissions`;
+
+    const res = await fetch(url, {
+      headers,
     });
 
     if (!res.ok) {
@@ -40,6 +51,7 @@ export async function fetchUserSubmissions(userEmail?: string): Promise<TaskHist
       proofType: String(item.proofType || 'Verification Proof'),
       proofUrl: item.proofUrl ? String(item.proofUrl) : undefined,
       appId: item.appId ? String(item.appId) : undefined,
+      appLogoUrl: item.appLogoUrl || item.logoUrl || undefined,
     }));
   } catch (err) {
     console.error('Error fetching live submissions:', err);
@@ -70,8 +82,15 @@ export async function uploadProofImageToCloudinary(
       } as any);
     }
 
+    const token = await getSavedBackendToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_CONFIG.baseUrl}/api/upload`, {
       method: 'POST',
+      headers,
       body: formData,
     });
 
@@ -104,6 +123,7 @@ export interface NewSubmissionPayload {
   proof: string;
   proofType?: string;
   proofUrl?: string;
+  appLogoUrl?: string;
 }
 
 export async function submitTaskProof(
@@ -139,12 +159,18 @@ export async function submitTaskProof(
       originAppId: 'earnbyapps-mobile',
     };
 
+    const token = await getSavedBackendToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const res = await fetch(`${API_CONFIG.baseUrl}/api/submissions`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
@@ -162,6 +188,7 @@ export async function submitTaskProof(
       proofType: finalProofType === 'image' ? 'Screenshot Proof' : 'Text Proof',
       proofUrl: payload.proofUrl,
       appId: payload.appId,
+      appLogoUrl: payload.appLogoUrl,
     };
 
     return { success: true, item: newItem };

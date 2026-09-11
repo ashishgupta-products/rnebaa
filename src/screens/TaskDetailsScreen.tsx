@@ -1,22 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Linking,
-  Platform,
   ActivityIndicator,
   Image,
   BackHandler,
-  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { Campaign, TaskHistoryItem } from '../types/campaign';
 import { submitTaskProof, uploadProofImageToCloudinary } from '../services/submissionService';
+import { CampaignLogo } from '../components/CampaignLogo';
 
 interface TaskDetailsScreenProps {
   campaign: Campaign;
@@ -37,80 +36,52 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   onBack,
   onSubmitProof,
 }) => {
-  const [copied, setCopied] = useState<boolean>(false);
-  const [proofText, setProofText] = useState<string>('');
-  const [proofType, setProofType] = useState<string>('Account ID / Username');
-  const [selectedImage, setSelectedImage] = useState<{ uri: string; mimeType?: string } | null>(null);
-  const [hasStarted, setHasStarted] = useState<boolean>(false);
+  const [selectedImage, setSelectedImage] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitted, setSubmitted] = useState<boolean>(isAlreadySubmitted);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [uploadProgressText, setUploadProgressText] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
-  // Intercept Android hardware back button and system back swipe gestures
+  const handleCopyReferralCode = async () => {
+    if (!campaign.referralCode) return;
+    try {
+      await Clipboard.setStringAsync(campaign.referralCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    } catch (e) {
+      console.warn('Could not copy referral code:', e);
+    }
+  };
+
+  // Hardware back button handler for Android
   useEffect(() => {
     const handleBackPress = () => {
       onBack();
-      return true; // Prevents default exit behavior (closing the app)
+      return true;
     };
-
-    const backSubscription = BackHandler.addEventListener(
-      'hardwareBackPress',
-      handleBackPress
-    );
-
-    return () => backSubscription.remove();
+    const sub = BackHandler.addEventListener('hardwareBackPress', handleBackPress);
+    return () => sub.remove();
   }, [onBack]);
 
-  // Touch gesture responder to detect left-edge swipe to go back
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // Detect horizontal rightward swipe originating from the left screen edge (within 70px)
-        return (
-          evt.nativeEvent.pageX < 70 &&
-          gestureState.dx > 25 &&
-          Math.abs(gestureState.dy) < 35
-        );
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureState.dx > 50 || gestureState.vx > 0.3) {
-          onBack();
-        }
-      },
-    })
-  ).current;
-
-  const initialLetter = campaign.name.charAt(0).toUpperCase();
-
-  const handleCopyCode = (code: string) => {
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(code).catch(() => {});
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
-  };
-
-  const handleStartTask = () => {
-    setHasStarted(true);
+  const handleFollowLink = () => {
     if (campaign.externalUrl && (campaign.externalUrl.startsWith('http://') || campaign.externalUrl.startsWith('https://'))) {
       Linking.openURL(campaign.externalUrl).catch(() => {});
     }
   };
 
-  const handlePickImage = async () => {
+  const handlePickFile = async () => {
     try {
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        setErrorMsg('Gallery permission is needed to attach a proof screenshot.');
+        setErrorMsg('Gallery permission is needed to attach proof media.');
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.85,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -118,47 +89,45 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
         setSelectedImage({
           uri: asset.uri,
           mimeType: asset.mimeType || 'image/jpeg',
+          name: asset.fileName || 'proof_media.jpg',
         });
         setErrorMsg(null);
       }
-    } catch (err: any) {
-      console.warn('Image picker error:', err);
-      setErrorMsg('Could not open image picker.');
+    } catch (err) {
+      console.warn('Media picker error:', err);
+      setErrorMsg('Could not open file picker.');
     }
   };
 
   const handleSubmit = async () => {
-    if (!proofText.trim() && !selectedImage) {
-      setErrorMsg('Please attach a proof screenshot or enter your account details.');
+    if (!selectedImage) {
+      setErrorMsg('Please upload your completion proof media before submitting.');
       return;
     }
 
     setErrorMsg(null);
     setIsSubmitting(true);
-    setUploadProgressText('Processing submission...');
+    setUploadProgressText('Uploading media to Cloudinary...');
 
     try {
       let uploadedUrl: string | undefined = undefined;
-      let uploadedPublicId: string = proofText.trim() || 'mobile_proof';
+      let uploadedPublicId: string = 'media_proof';
 
-      // 1. Upload screenshot to Cloudinary via backend /api/upload
-      if (selectedImage) {
-        setUploadProgressText('Uploading screenshot to Cloudinary...');
-        const uploadRes = await uploadProofImageToCloudinary(
-          selectedImage.uri,
-          selectedImage.mimeType
-        );
+      // 1. Upload media to Cloudinary
+      const uploadRes = await uploadProofImageToCloudinary(
+        selectedImage.uri,
+        selectedImage.mimeType
+      );
 
-        if (!uploadRes.success || !uploadRes.url) {
-          throw new Error(uploadRes.error || 'Failed to upload screenshot to Cloudinary');
-        }
-
-        uploadedUrl = uploadRes.url;
-        uploadedPublicId = uploadRes.publicId || uploadedPublicId;
+      if (!uploadRes.success || !uploadRes.url) {
+        throw new Error(uploadRes.error || 'Failed to upload media to Cloudinary');
       }
 
-      // 2. Persist submission record with Cloudinary URL in Neon PostgreSQL database
-      setUploadProgressText('Saving submission to database...');
+      uploadedUrl = uploadRes.url;
+      uploadedPublicId = uploadRes.publicId || uploadedPublicId;
+
+      // 2. Submit to backend
+      setUploadProgressText('Saving submission...');
       const res = await submitTaskProof({
         userName,
         userEmail,
@@ -166,8 +135,9 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
         appId: campaign.id,
         reward: campaign.reward,
         proof: uploadedPublicId,
-        proofType: uploadedUrl ? 'image' : 'text',
+        proofType: 'image',
         proofUrl: uploadedUrl,
+        appLogoUrl: campaign.logoUrl,
       });
 
       if (res.success && res.item) {
@@ -177,269 +147,227 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
         setErrorMsg(res.error || 'Could not submit proof. Please try again.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error submitting proof to server.');
+      console.error('Submission error:', err);
+      setErrorMsg(err.message || 'Submission failed. Please check network and try again.');
     } finally {
       setIsSubmitting(false);
       setUploadProgressText('');
     }
   };
 
+  // Build bullets from campaign description or default structured steps
+  const getBullets = (): string[] => {
+    if (campaign.description && campaign.description.trim().length > 0) {
+      const lines = campaign.description
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0);
+      if (lines.length > 1) {
+        return lines.map((l) => (l.startsWith('•') || l.startsWith('-') ? l.replace(/^[-•]\s*/, '') : l));
+      }
+    }
+    return [
+      `Install the ${campaign.name} App`,
+      'Complete the registration and required actions as described.',
+      'Come back to this App and upload the screenshot.',
+      'Get paid in 24 hours',
+    ];
+  };
+
+  const bullets = getBullets();
+
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
-      {/* Top App Bar */}
+    <View style={styles.container}>
+      {/* Top Header Bar */}
       <View style={styles.header}>
         <TouchableOpacity
-          activeOpacity={0.7}
           style={styles.backButton}
           onPress={onBack}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color="#0F172A" />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={24} color="#0F172A" />
         </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>Task Details</Text>
-
-        <View style={styles.walletPill}>
-          <Ionicons name="wallet-outline" size={14} color="#15803D" />
-          <Text style={styles.walletAmount}>₹{userBalance.toFixed(2)}</Text>
-        </View>
+        <Text style={styles.headerTitle}>Offers Details</Text>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Campaign Hero Card */}
+        {/* Main Hero Card (Lavender/Blue with Ribbon and Gold Coin) */}
         <View style={styles.heroCard}>
-          <View style={styles.heroTopRow}>
-            <View style={styles.appIconBox}>
-              <Text style={styles.appIconText}>{initialLetter}</Text>
-            </View>
-            <View style={styles.heroInfo}>
-              <Text style={styles.appName}>{campaign.name}</Text>
-              <Text style={styles.appCategory}>{campaign.category}</Text>
-              <View style={styles.platformsRow}>
-                {campaign.platforms.map((p) => (
-                  <View key={p} style={styles.platformBadge}>
-                    <Text style={styles.platformBadgeText}>{p}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
+          {/* Top-Right Ribbon Badge */}
+          <View style={styles.ribbonBadge}>
+            <Text style={styles.ribbonText}>Offer</Text>
           </View>
 
-          <View style={styles.payoutBox}>
-            <View>
-              <Text style={styles.payoutLabel}>Completion Payout</Text>
-              <Text style={styles.payoutAmount}>
-                +{campaign.currencySymbol || '₹'}{campaign.reward.toFixed(2)}
+          <View style={styles.heroMainRow}>
+            {/* Left Column: Logo & App Name */}
+            <View style={styles.heroLeftCol}>
+              <View style={styles.logoWrapper}>
+                <CampaignLogo
+                  name={campaign.name}
+                  logoUrl={campaign.logoUrl}
+                  size={52}
+                  borderRadius={12}
+                />
+              </View>
+              <Text style={styles.appName} numberOfLines={2}>
+                {campaign.name}
               </Text>
             </View>
-            <View style={styles.payoutBadge}>
-              <Ionicons name="checkmark-circle" size={16} color="#15803D" />
-              <Text style={styles.payoutBadgeText}>Verified Reward</Text>
+
+            {/* Right Column: Layered Gold Coin Graphic */}
+            <View style={styles.coinContainer}>
+              <View style={styles.coinBackShadow} />
+              <View style={styles.coinOuter}>
+                <View style={styles.coinInner}>
+                  <Text style={styles.coinAmount}>₹{campaign.reward}</Text>
+                </View>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* Referral Code Box (if applicable) */}
+        {/* How to Avail Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>How to Avail</Text>
+          <View style={styles.bulletsList}>
+            {bullets.map((b, idx) => (
+              <View key={idx} style={styles.bulletRow}>
+                <Text style={styles.bulletDot}>•</Text>
+                <Text style={styles.bulletText}>{b}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Optional Referral / Invite Code Box */}
         {campaign.referralCode ? (
           <View style={styles.referralCard}>
-            <View style={styles.referralHeaderRow}>
+            <View style={styles.referralHeader}>
               <View style={styles.referralTag}>
-                <Ionicons name="gift-outline" size={14} color="#2563EB" />
-                <Text style={styles.referralTagText}>REFERRAL CODE</Text>
+                <Ionicons name="gift" size={13} color="#2563EB" />
+                <Text style={styles.referralTagText}>Referral Code</Text>
               </View>
-              <Text style={styles.referralHelper}>Use during signup</Text>
+              <Text style={styles.referralHint}>Tap to copy & use during signup</Text>
             </View>
-            <View style={styles.codeRow}>
-              <Text selectable style={styles.codeText}>
-                {campaign.referralCode}
-              </Text>
+
+            <View style={styles.referralActionRow}>
+              <View style={styles.codePill}>
+                <Text style={styles.codeText} selectable>
+                  {campaign.referralCode}
+                </Text>
+              </View>
+
               <TouchableOpacity
-                style={[styles.copyButton, copied && styles.copyButtonActive]}
-                onPress={() => handleCopyCode(campaign.referralCode!)}
+                style={[styles.copyButton, copiedCode && styles.copiedButton]}
+                onPress={handleCopyReferralCode}
+                activeOpacity={0.7}
               >
                 <Ionicons
-                  name={copied ? 'checkmark' : 'copy-outline'}
+                  name={copiedCode ? 'checkmark-circle' : 'copy-outline'}
                   size={16}
-                  color={copied ? '#15803D' : '#2563EB'}
+                  color={copiedCode ? '#059669' : '#2563EB'}
                 />
-                <Text style={[styles.copyButtonText, copied && styles.copyButtonTextActive]}>
-                  {copied ? 'Copied!' : 'Copy Code'}
+                <Text style={[styles.copyButtonText, copiedCode && styles.copiedButtonText]}>
+                  {copiedCode ? 'Copied!' : 'Copy'}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         ) : null}
 
-        {/* Step-by-Step Checklist */}
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionHeading}>📋 Steps to Earn</Text>
-          <View style={styles.stepsList}>
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumberCircle}>
-                <Text style={styles.stepNumber}>1</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Install & Open</Text>
-                <Text style={styles.stepDescription}>
-                  Click the "Start Task & Launch" button below to open the official application.
-                </Text>
-              </View>
-            </View>
+        {/* Follow This Link Button */}
+        <TouchableOpacity
+          style={styles.followLinkButton}
+          onPress={handleFollowLink}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.followLinkText}>Follow this link</Text>
+        </TouchableOpacity>
 
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumberCircle}>
-                <Text style={styles.stepNumber}>2</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Sign Up & Complete Requirements</Text>
-                <Text style={styles.stepDescription}>
-                  {campaign.description || 'Register your account and perform the required action.'}
-                </Text>
-              </View>
-            </View>
+        {/* Upload Media Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeading}>Upload Media</Text>
 
-            <View style={styles.stepItem}>
-              <View style={styles.stepNumberCircle}>
-                <Text style={styles.stepNumber}>3</Text>
-              </View>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Submit Verification Proof</Text>
-                <Text style={styles.stepDescription}>
-                  Enter your registered username, phone, or account ID below to claim your ₹{campaign.reward.toFixed(2)}.
+          {selectedImage ? (
+            <View style={styles.previewBox}>
+              <Image
+                source={{ uri: selectedImage.uri }}
+                style={styles.previewImg}
+                resizeMode="cover"
+              />
+              <View style={styles.previewMeta}>
+                <Text style={styles.previewFileName} numberOfLines={1}>
+                  {selectedImage.name || 'Proof Media Attached'}
                 </Text>
+                <Text style={styles.previewStatus}>Ready to submit</Text>
               </View>
+              <TouchableOpacity
+                onPress={() => setSelectedImage(null)}
+                style={styles.removeBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-circle" size={24} color="#EF4444" />
+              </TouchableOpacity>
             </View>
-          </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadBox}
+              onPress={handlePickFile}
+              activeOpacity={0.7}
+            >
+              <View style={styles.uploadIconWrap}>
+                <Ionicons name="arrow-up" size={22} color="#0F172A" />
+                <View style={styles.uploadTrayLine} />
+              </View>
+              <Text style={styles.uploadTitle}>Choose File To Upload</Text>
+              <Text style={styles.uploadSubtitle}>
+                (Supports MP4, JPG, PNG and JPEG up to 20MB)
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {errorMsg && (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle" size={16} color="#DC2626" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          )}
         </View>
 
-        {/* Task Description & Details */}
-        {campaign.longDescription || campaign.description ? (
-          <View style={styles.sectionCard}>
-            <Text style={styles.sectionHeading}>ℹ️ Task Description</Text>
-            <Text style={styles.bodyDescription}>
-              {campaign.longDescription || campaign.description}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Action Button: Start Task */}
-        {!submitted && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            style={styles.primaryActionButton}
-            onPress={handleStartTask}
-          >
-            <Ionicons name="rocket-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.primaryActionText}>
-              {hasStarted ? 'Reopen Official App 🚀' : 'Start Task & Launch App 🚀'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Submission Form Section */}
+        {/* Submit Action Button */}
         {submitted ? (
-          <View style={styles.successCard}>
-            <View style={styles.successIconCircle}>
-              <Ionicons name="time" size={28} color="#B45309" />
-            </View>
-            <Text style={styles.successTitle}>Proof Submitted!</Text>
-            <Text style={styles.successSubtitle}>
-              Your proof is currently awaiting verification. Once verified, ₹{campaign.reward.toFixed(2)} will be credited to your wallet balance.
+          <View style={styles.successBox}>
+            <Ionicons name="checkmark-circle" size={26} color="#15803D" />
+            <Text style={styles.successTitle}>Proof Submitted Successfully!</Text>
+            <Text style={styles.successSub}>
+              Your proof is in verification. You will be credited ₹ {campaign.reward} upon confirmation.
             </Text>
-            <TouchableOpacity
-              style={styles.viewHistoryButton}
-              onPress={onBack}
-            >
-              <Text style={styles.viewHistoryButtonText}>Back to Tasks</Text>
+            <TouchableOpacity style={styles.backToOffersBtn} onPress={onBack}>
+              <Text style={styles.backToOffersText}>Return to Offers</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.proofCard}>
-            <Text style={styles.proofCardTitle}>📤 Submit Task Proof</Text>
-            <Text style={styles.proofCardSubtitle}>
-              Provide your details so our verification system can confirm your task completion.
-            </Text>
-
-            {errorMsg ? (
-              <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{errorMsg}</Text>
-              </View>
-            ) : null}
-
-            {/* Screenshot Upload Zone */}
-            <Text style={styles.inputLabel}>Screenshot Proof (Uploads to Cloudinary):</Text>
-            {selectedImage ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image
-                  source={{ uri: selectedImage.uri }}
-                  style={styles.imagePreview}
-                  resizeMode="cover"
-                />
-                <View style={styles.imageOverlay}>
-                  <View style={styles.attachedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#15803D" />
-                    <Text style={styles.attachedText}>Screenshot Attached</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => setSelectedImage(null)}
-                  >
-                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                    <Text style={styles.removeImageText}>Remove</Text>
-                  </TouchableOpacity>
-                </View>
+          <TouchableOpacity
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+            activeOpacity={0.85}
+          >
+            {isSubmitting ? (
+              <View style={styles.loadingRow}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <Text style={styles.submitButtonText}>
+                  {uploadProgressText || 'Submitting...'}
+                </Text>
               </View>
             ) : (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.uploadDottedBox}
-                onPress={handlePickImage}
-              >
-                <View style={styles.uploadIconCircle}>
-                  <Ionicons name="cloud-upload-outline" size={24} color="#2563EB" />
-                </View>
-                <Text style={styles.uploadPromptText}>Attach Completion Screenshot</Text>
-                <Text style={styles.uploadSubPromptText}>
-                  Tap to upload proof image directly to Cloudinary
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.submitButtonText}>Submit</Text>
             )}
-
-            <Text style={[styles.inputLabel, { marginTop: 14 }]}>
-              Proof Details / Notes (Username / Phone / Account ID):
-            </Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="e.g. Registered Email, User ID, or Phone..."
-              placeholderTextColor="#94A3B8"
-              value={proofText}
-              onChangeText={setProofText}
-              autoCapitalize="none"
-            />
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={[styles.submitButton, isSubmitting && { opacity: 0.7 }]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={styles.submitButtonText}>
-                    {uploadProgressText || 'Submitting...'}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  Submit Proof for ₹{campaign.reward.toFixed(2)}
-                </Text>
-              )}
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
@@ -449,486 +377,395 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
   },
   backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+    padding: 4,
+    marginRight: 12,
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#0F172A',
-  },
-  walletPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  walletAmount: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#15803D',
+    letterSpacing: -0.3,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   heroCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-      },
-    }),
+    backgroundColor: '#EEF2FF',
+    borderRadius: 24,
+    padding: 22,
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 4,
   },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
+  ribbonBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#3E54AC',
+    paddingVertical: 5,
+    paddingHorizontal: 22,
+    borderTopRightRadius: 24,
+    borderBottomLeftRadius: 16,
   },
-  appIconBox: {
-    width: 54,
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  appIconText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#2563EB',
-  },
-  heroInfo: {
-    flex: 1,
-  },
-  appName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  appCategory: {
-    fontSize: 13,
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  platformsRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  platformBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-  },
-  platformBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  payoutBox: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F0FDF4',
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  payoutLabel: {
-    fontSize: 11,
-    color: '#166534',
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  payoutAmount: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#15803D',
-  },
-  payoutBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-  },
-  payoutBadgeText: {
+  ribbonText: {
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
-    color: '#15803D',
+    letterSpacing: 0.2,
   },
-  referralCard: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: 14,
-  },
-  referralHeaderRow: {
+  heroMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingTop: 6,
+  },
+  heroLeftCol: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  logoWrapper: {
+    width: 60,
+    height: 60,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+    marginBottom: 12,
+  },
+  appName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+  coinContainer: {
+    width: 76,
+    height: 76,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  coinBackShadow: {
+    position: 'absolute',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#EAB308',
+    right: 1,
+    bottom: 2,
+  },
+  coinOuter: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#FACC15',
+    borderWidth: 4,
+    borderColor: '#EAB308',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#CA8A04',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  coinInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: '#EAB308',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDE047',
+  },
+  coinAmount: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  sectionContainer: {
+    marginTop: 22,
+  },
+  sectionHeading: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+    letterSpacing: -0.2,
+  },
+  bulletsList: {
+    gap: 4,
+  },
+  bulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 3,
+  },
+  bulletDot: {
+    fontSize: 16,
+    color: '#1E293B',
+    lineHeight: 22,
+    marginRight: 8,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1E293B',
+    lineHeight: 22,
+    fontWeight: '400',
+  },
+  referralCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    padding: 14,
+    marginTop: 18,
+  },
+  referralHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   referralTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   referralTagText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#2563EB',
-    letterSpacing: 0.5,
   },
-  referralHelper: {
+  referralHint: {
     fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
   },
-  codeRow: {
+  referralActionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 10,
+  },
+  codePill: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#DBEAFE',
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   codeText: {
     fontSize: 16,
     fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#1E293B',
-    letterSpacing: 1,
+    color: '#0F172A',
+    letterSpacing: 1.5,
   },
   copyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     backgroundColor: '#EFF6FF',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
   },
-  copyButtonActive: {
-    backgroundColor: '#DCFCE7',
+  copiedButton: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
   copyButtonText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: '#2563EB',
   },
-  copyButtonTextActive: {
-    color: '#15803D',
+  copiedButtonText: {
+    color: '#059669',
   },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 12,
-  },
-  stepsList: {
-    gap: 14,
-  },
-  stepItem: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  stepNumberCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#2563EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  stepNumber: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  stepContent: {
-    flex: 1,
-  },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  stepDescription: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
-  },
-  bodyDescription: {
-    fontSize: 13,
-    color: '#475569',
-    lineHeight: 20,
-  },
-  primaryActionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#2563EB',
-    paddingVertical: 14,
-    borderRadius: 16,
-    marginBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#2563EB',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
-      },
-    }),
-  },
-  primaryActionText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  proofCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  proofCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 4,
-  },
-  proofCardSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 14,
-    lineHeight: 16,
-  },
-  errorBox: {
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  errorText: {
-    color: '#DC2626',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 6,
-  },
-  textInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: '#0F172A',
-    marginBottom: 14,
-  },
-  submitButton: {
-    backgroundColor: '#0F172A',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  successCard: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 16,
-    padding: 20,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  successIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FDE68A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  successTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#92400E',
-    marginBottom: 6,
-  },
-  successSubtitle: {
-    fontSize: 13,
-    color: '#B45309',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  viewHistoryButton: {
-    backgroundColor: '#92400E',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-  },
-  viewHistoryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  uploadDottedBox: {
+  followLinkButton: {
+    backgroundColor: '#EEF2FF',
     borderWidth: 1.5,
-    borderColor: '#93C5FD',
-    borderStyle: 'dashed',
+    borderColor: '#4361EE',
     borderRadius: 14,
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 18,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  followLinkText: {
+    color: '#3B57DB',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  uploadBox: {
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1.5,
+    borderColor: '#4361EE',
+    borderRadius: 14,
+    paddingVertical: 24,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  uploadIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#DBEAFE',
+  uploadIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
   },
-  uploadPromptText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E40AF',
-    marginBottom: 2,
+  uploadTrayLine: {
+    width: 20,
+    height: 2.5,
+    backgroundColor: '#0F172A',
+    borderRadius: 2,
+    marginTop: 2,
   },
-  uploadSubPromptText: {
+  uploadTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  uploadSubtitle: {
     fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
+    textAlign: 'center',
   },
-  imagePreviewContainer: {
+  previewBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
     borderRadius: 14,
-    overflow: 'hidden',
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
-    marginBottom: 8,
   },
-  imagePreview: {
-    width: '100%',
-    height: 180,
-  },
-  imageOverlay: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  attachedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  attachedText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  removeImageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
+  previewImg: {
+    width: 48,
+    height: 48,
     borderRadius: 8,
-    backgroundColor: '#FEE2E2',
   },
-  removeImageText: {
-    fontSize: 11,
+  previewMeta: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  previewFileName: {
+    fontSize: 14,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  previewStatus: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  removeBtn: {
+    padding: 4,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEE2E2',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  errorText: {
+    fontSize: 12,
     color: '#DC2626',
+    fontWeight: '600',
+    flex: 1,
+  },
+  submitButton: {
+    backgroundColor: '#4361EE',
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 22,
+    shadowColor: '#4361EE',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  loadingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  successBox: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 16,
+    padding: 18,
+    alignItems: 'center',
+    marginTop: 22,
+  },
+  successTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#15803D',
+    marginTop: 6,
+  },
+  successSub: {
+    fontSize: 13,
+    color: '#166534',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  backToOffersBtn: {
+    marginTop: 14,
+    backgroundColor: '#15803D',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  backToOffersText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
   },
 });

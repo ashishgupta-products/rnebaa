@@ -28,4 +28,5 @@ export interface TaskHistoryItem {
   proofType?: string;
   proofUrl?: string;
   appId?: string;
+  appLogoUrl?: string;
 }

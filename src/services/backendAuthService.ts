@@ -113,3 +113,45 @@ export async function clearBackendSession(): Promise<void> {
     console.warn('Error clearing backend session:', err);
   }
 }
+
+/**
+ * Fetch latest user profile and real wallet balance from PostgreSQL database
+ */
+export async function fetchLatestBackendUser(userEmail: string): Promise<BackendUser | null> {
+  if (!userEmail) return null;
+  try {
+    const token = await getSavedBackendToken();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const res = await fetch(
+      `${API_CONFIG.baseUrl}/api/users?email=${encodeURIComponent(userEmail.trim())}`,
+      { headers }
+    );
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    if (data && data.email) {
+      const backendUser: BackendUser = {
+        id: String(data.id || '1'),
+        email: data.email,
+        name: data.name || data.fullName || userEmail.split('@')[0],
+        role: data.role || 'user',
+        balance: Number(data.balance || 0),
+        originAppId: 'mobile',
+      };
+
+      await AsyncStorage.setItem(STORAGE_KEYS.BACKEND_USER, JSON.stringify(backendUser));
+      return backendUser;
+    }
+    return null;
+  } catch (err) {
+    console.warn('Error fetching latest backend user:', err);
+    return null;
+  }
+}

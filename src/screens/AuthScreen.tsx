@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppLogo } from '../components/AppLogo';
+import { BrandLogo } from '../components/BrandLogo';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { HomeScreen } from './HomeScreen';
@@ -31,12 +32,15 @@ import {
   performNativeGoogleSignIn,
   performNativeGoogleSignOut,
 } from '../services/nativeAuthService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   syncMobileGoogleWithBackend,
   getSavedBackendUser,
   getSavedBackendToken,
   clearBackendSession,
+  fetchLatestBackendUser,
 } from '../services/backendAuthService';
+import { fetchUserSubmissions } from '../services/submissionService';
 import { GOOGLE_AUTH_CONFIG, isPlatformConfigured } from '../config/authConfig';
 
 export const AuthScreen: React.FC = () => {
@@ -64,6 +68,15 @@ export const AuthScreen: React.FC = () => {
             backendToken: backendToken || undefined,
             backendSyncStatus: backendToken ? 'synced' : 'pending',
           });
+
+          // Concurrently fetch latest live user & balance from PostgreSQL
+          if (savedUser.email) {
+            fetchLatestBackendUser(savedUser.email).then((fresh) => {
+              if (fresh) {
+                setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+              }
+            });
+          }
         }
       } catch (err) {
         console.warn('Error restoring session:', err);
@@ -95,6 +108,47 @@ export const AuthScreen: React.FC = () => {
 
     return () => backSubscription.remove();
   }, [selectedCampaign, activeTab]);
+
+  // Synchronize and cache user task submissions to eliminate completed tasks from HomeScreen
+  useEffect(() => {
+    if (!user?.email) return;
+
+    // Refresh live balance from PostgreSQL
+    fetchLatestBackendUser(user.email).then((fresh) => {
+      if (fresh) {
+        setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+      }
+    });
+
+    const emailKey = user.email.toLowerCase().trim();
+    const cacheKey = `@user_submissions_${emailKey}`;
+
+    // 1. Immediately hydrate from AsyncStorage for 0ms delay
+    AsyncStorage.getItem(cacheKey)
+      .then((cached) => {
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setUserSubmissions(parsed);
+            }
+          } catch (e) {}
+        }
+      })
+      .catch(() => {});
+
+    // 2. Fetch fresh live submissions from database
+    fetchUserSubmissions(user.email)
+      .then((live) => {
+        if (Array.isArray(live) && live.length > 0) {
+          setUserSubmissions(live);
+          AsyncStorage.setItem(cacheKey, JSON.stringify(live)).catch(() => {});
+        }
+      })
+      .catch((e) => {
+        console.warn('Error fetching live submissions in AuthScreen:', e);
+      });
+  }, [user?.email]);
 
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
@@ -188,63 +242,84 @@ export const AuthScreen: React.FC = () => {
 
   // If user is authenticated, render the main app experience with bottom navigation
   if (user) {
-    if (selectedCampaign) {
-      return (
-        <SafeAreaView style={styles.mainContainer}>
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-          <TaskDetailsScreen
-            campaign={selectedCampaign}
-            userBalance={user.backendUser?.balance || 0}
-            userName={user.name}
-            userEmail={user.email}
-            isAlreadySubmitted={userSubmissions.some((s) => s.appName === selectedCampaign.name)}
-            onBack={() => setSelectedCampaign(null)}
-            onSubmitProof={(submission) => {
-              setUserSubmissions((prev) => [submission, ...prev]);
-            }}
-          />
-        </SafeAreaView>
-      );
-    }
-
     return (
       <SafeAreaView style={styles.mainContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-        <View style={styles.screenContainer}>
-          {activeTab === 'home' && (
-            <HomeScreen
-              user={user}
-              onNavigateToTab={(tab) => {
-                setSelectedCampaign(null);
-                setActiveTab(tab);
-              }}
-              onSelectCampaign={(campaign) => setSelectedCampaign(campaign)}
-            />
-          )}
-          {activeTab === 'history' && (
-            <HistoryScreen
-              user={user}
-              submissions={userSubmissions}
-              onNavigateToHome={() => {
-                setSelectedCampaign(null);
-                setActiveTab('home');
-              }}
-            />
-          )}
-          {activeTab === 'profile' && (
-            <ProfileScreen
-              user={user}
-              onSignOut={handleSignOut}
-            />
-          )}
+
+        {/* Main Tab Screens - kept mounted in memory to preserve state, scroll, and prevent reloading */}
+        <View style={{ flex: 1, display: selectedCampaign ? 'none' : 'flex' }}>
+          <View style={styles.screenContainer}>
+            <View style={{ flex: 1, display: activeTab === 'home' ? 'flex' : 'none' }}>
+              <HomeScreen
+                user={user}
+                userSubmissions={userSubmissions}
+                onNavigateToTab={(tab) => {
+                  setSelectedCampaign(null);
+                  setActiveTab(tab);
+                }}
+                onSelectCampaign={(campaign) => setSelectedCampaign(campaign)}
+              />
+            </View>
+            <View style={{ flex: 1, display: activeTab === 'history' ? 'flex' : 'none' }}>
+              <HistoryScreen
+                user={user}
+                submissions={userSubmissions}
+                onNavigateToHome={() => {
+                  setSelectedCampaign(null);
+                  setActiveTab('home');
+                }}
+                onRefreshUser={(freshBackendUser) => {
+                  setUser((prev) => (prev ? { ...prev, backendUser: freshBackendUser } : prev));
+                }}
+              />
+            </View>
+            <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none' }}>
+              <ProfileScreen
+                user={user}
+                onSignOut={handleSignOut}
+                onUpdateUser={(updated) => setUser(updated)}
+              />
+            </View>
+          </View>
+          <BottomNavBar
+            currentTab={activeTab}
+            onSelectTab={(tab) => {
+              setSelectedCampaign(null);
+              setActiveTab(tab);
+              if (user?.email) {
+                fetchLatestBackendUser(user.email).then((fresh) => {
+                  if (fresh) {
+                    setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+                  }
+                });
+              }
+            }}
+          />
         </View>
-        <BottomNavBar
-          currentTab={activeTab}
-          onSelectTab={(tab) => {
-            setSelectedCampaign(null);
-            setActiveTab(tab);
-          }}
-        />
+
+        {/* Task Details view - mounts over tabs so returning is instant with zero reload */}
+        {selectedCampaign && (
+          <View style={{ flex: 1 }}>
+            <TaskDetailsScreen
+              campaign={selectedCampaign}
+              userBalance={user.backendUser?.balance || 0}
+              userName={user.name}
+              userEmail={user.email}
+              isAlreadySubmitted={userSubmissions.some((s) => s.appName === selectedCampaign.name)}
+              onBack={() => setSelectedCampaign(null)}
+              onSubmitProof={(submission) => {
+                setUserSubmissions((prev) => {
+                  const updated = [submission, ...prev.filter((p) => p.id !== submission.id)];
+                  if (user?.email) {
+                    const cacheKey = `@user_submissions_${user.email.toLowerCase().trim()}`;
+                    AsyncStorage.setItem(cacheKey, JSON.stringify(updated)).catch(() => {});
+                  }
+                  return updated;
+                });
+              }}
+            />
+          </View>
+        )}
       </SafeAreaView>
     );
   }
@@ -264,14 +339,11 @@ export const AuthScreen: React.FC = () => {
             <Text style={styles.trustBadgeText}>#1 Trusted Earning Platform</Text>
           </View>
 
-          {/* App Branding Logo featuring Indian Rupee symbol */}
-          <AppLogo size={70} showSparkle style={{ marginBottom: 14 }} />
+          {/* App Branding Logo */}
+          <AppLogo size={64} showSparkle style={{ marginBottom: 12 }} />
 
-          <Text style={styles.title}>EarnByApps</Text>
+          <BrandLogo fontSize={32} style={{ marginBottom: 4 }} />
           <Text style={styles.subtitle}>India's Largest Earning App</Text>
-          <Text style={styles.heroSubText}>
-            Test apps, complete easy tasks & earn real cash directly via UPI or bank transfer.
-          </Text>
 
           {/* Trust Value Highlights Card */}
           <View style={styles.featuresCard}>
@@ -327,11 +399,6 @@ export const AuthScreen: React.FC = () => {
               />
             </View>
 
-            <View style={styles.securityRow}>
-              <Ionicons name="shield-checkmark" size={13} color="#059669" />
-              <Text style={styles.securityText}>Official Google OAuth • 100% Safe</Text>
-            </View>
-
             {/* Skip Login / Preview Mode Button */}
             <TouchableOpacity
               activeOpacity={0.8}
@@ -378,6 +445,11 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'android'
+      ? Math.max(StatusBar.currentHeight || 0, 36) + 14
+      : Platform.OS === 'ios'
+      ? 14
+      : 10,
   },
   screenContainer: {
     flex: 1,
@@ -434,16 +506,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#2563EB',
-    marginBottom: 8,
+    marginBottom: 16,
     letterSpacing: -0.2,
-  },
-  heroSubText: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 19,
-    paddingHorizontal: 16,
-    marginBottom: 20,
   },
   featuresCard: {
     width: '100%',
@@ -507,18 +571,7 @@ const styles = StyleSheet.create({
   buttonWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  securityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 14,
-  },
-  securityText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#059669',
+    marginBottom: 12,
   },
   skipButton: {
     flexDirection: 'row',

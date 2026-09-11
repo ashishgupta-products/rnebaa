@@ -15,6 +15,12 @@ export interface UserProfile {
   picture?: string;
   verifiedEmail?: boolean;
   idToken?: string;
+  upiId?: string;
+  phoneNumber?: string;
+  gender?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
   backendUser?: BackendUser;
   backendToken?: string;
   backendSyncStatus?: 'synced' | 'pending' | 'failed';
