@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile } from '../types/auth';
 import { API_CONFIG } from '../config/authConfig';
-import { getSavedBackendToken } from './backendAuthService';
+import { getSavedBackendToken, DEFAULT_BACKEND_TOKEN } from './backendAuthService';
 
 const USER_STORAGE_KEY = '@earnbyapps_user_session';
 
@@ -72,7 +72,7 @@ export async function fetchGoogleUserInfo(
 
 export function getDemoUserProfile(): UserProfile {
   return {
-    id: '109849204918239019284',
+    id: '30e5f8a9-1fca-46dc-a8ce-0b66a1d26366',
     name: 'Ashish Gupta',
     email: 'aashish.gupta.mails@gmail.com',
     picture: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
@@ -86,14 +86,14 @@ export function getDemoUserProfile(): UserProfile {
     bankIfscCode: '',
     backendSyncStatus: 'synced',
     backendUser: {
-      id: '1',
+      id: '30e5f8a9-1fca-46dc-a8ce-0b66a1d26366',
       email: 'aashish.gupta.mails@gmail.com',
       name: 'Ashish Gupta',
       role: 'admin',
-      balance: 6.00,
+      balance: 50.00,
       originAppId: 'mobile',
     },
-    backendToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.demo_session_jwt_token',
+    backendToken: DEFAULT_BACKEND_TOKEN,
   };
 }
 

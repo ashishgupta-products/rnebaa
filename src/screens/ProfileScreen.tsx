@@ -6,10 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Modal,
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../types/auth';
@@ -31,29 +31,39 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [saving, setSaving] = useState<boolean>(false);
   const [isDirty, setIsDirty] = useState<boolean>(false);
 
+  const resolveUpiNumber = (val?: string, fallbackPhone?: string) => {
+    if (val && /^\d{10}$/.test(val.trim())) return val.trim();
+    if (fallbackPhone) {
+      const digits = fallbackPhone.replace(/\D/g, '');
+      if (digits.length >= 10) return digits.slice(-10);
+    }
+    return '8319250462';
+  };
+
   // Form states
   const [fullName, setFullName] = useState<string>(user.name || 'Ashish Gupta');
   const [email, setEmail] = useState<string>(user.email || 'aashish.gupta.mails@gmail.com');
-  const [upiId, setUpiId] = useState<string>(user.upiId || 'aashish.gupta.mails@oksbi');
+  const [upiId, setUpiId] = useState<string>(resolveUpiNumber(user.upiId, user.phoneNumber));
   const [phone, setPhone] = useState<string>(user.phoneNumber || '8319250462');
   const [gender, setGender] = useState<string>(user.gender || 'male');
   const [bankName, setBankName] = useState<string>(user.bankAccountName || '');
   const [bankAccountNumber, setBankAccountNumber] = useState<string>(user.bankAccountNumber || '');
   const [bankIfsc, setBankIfsc] = useState<string>(user.bankIfscCode || '');
 
-  // Modal states
-  const [showGenderPicker, setShowGenderPicker] = useState<boolean>(false);
+  // Dropdown states
+  const [isGenderOpen, setIsGenderOpen] = useState<boolean>(false);
 
   // Sync state if user prop changes
   useEffect(() => {
     setFullName(user.name || 'Ashish Gupta');
     setEmail(user.email || 'aashish.gupta.mails@gmail.com');
-    setUpiId(user.upiId || 'aashish.gupta.mails@oksbi');
+    setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
     setPhone(user.phoneNumber || '8319250462');
     setGender(user.gender || 'male');
     setBankName(user.bankAccountName || '');
     setBankAccountNumber(user.bankAccountNumber || '');
     setBankIfsc(user.bankIfscCode || '');
+    setIsGenderOpen(false);
     setIsDirty(false);
   }, [user]);
 
@@ -65,12 +75,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     // Reset to user values
     setFullName(user.name || 'Ashish Gupta');
     setEmail(user.email || 'aashish.gupta.mails@gmail.com');
-    setUpiId(user.upiId || 'aashish.gupta.mails@oksbi');
+    setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
     setPhone(user.phoneNumber || '8319250462');
     setGender(user.gender || 'male');
     setBankName(user.bankAccountName || '');
     setBankAccountNumber(user.bankAccountNumber || '');
     setBankIfsc(user.bankIfscCode || '');
+    setIsGenderOpen(false);
     setIsDirty(false);
     setIsEditing(false);
   };
@@ -80,8 +91,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       Alert.alert('Validation Error', 'Full Name is required.');
       return;
     }
-    if (!upiId.trim()) {
-      Alert.alert('Validation Error', 'UPI ID is required.');
+    const cleanUpiNumber = upiId.replace(/\D/g, '');
+    if (!cleanUpiNumber || cleanUpiNumber.length !== 10) {
+      Alert.alert('Validation Error', 'Please enter a valid 10-digit UPI linked phone number not upi id');
       return;
     }
 
@@ -90,8 +102,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const updated = await updateUserProfileDetails({
         name: fullName.trim(),
         email: email.trim(),
-        upiId: upiId.trim(),
-        phoneNumber: phone.trim(),
+        upiId: cleanUpiNumber,
+        phoneNumber: cleanUpiNumber,
         gender: gender.trim(),
         bankAccountName: bankName.trim(),
         bankAccountNumber: bankAccountNumber.trim(),
@@ -145,7 +157,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={styles.brandHeroRow}>
               <Text style={styles.brandHeroBlue}>EarnBy</Text>
               <Text style={styles.brandHeroAmber}>Apps</Text>
-              <Text style={styles.brandHeroArrow}> ↗</Text>
             </View>
           </View>
         )}
@@ -154,6 +165,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.editContainer}>
             {/* Banner Card */}
             <View style={styles.bannerCard}>
+              <View style={styles.editAvatarWrapper}>
+                {user.picture ? (
+                  <Image source={{ uri: user.picture }} style={styles.editAvatar} />
+                ) : (
+                  <View style={styles.editAvatarFallback}>
+                    <Text style={styles.avatarFallbackText}>
+                      {(fullName || user.name || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.bannerTitle}>Update Your Profile</Text>
               <Text style={styles.bannerSubtitle}>
                 Keep your information up to date for better experience
@@ -162,22 +184,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
             {/* Form Fields */}
             <View style={styles.formCard}>
-              {/* Full Name Field */}
+              {/* Full Name Field (Read Only) */}
               <View style={styles.formField}>
                 <View style={styles.fieldLabelRow}>
                   <Ionicons name="person-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
                   <Text style={styles.fieldLabel}>Full Name</Text>
-                  <Text style={styles.asterisk}> *</Text>
                 </View>
                 <TextInput
                   value={fullName}
-                  onChangeText={(text) => {
-                    setFullName(text);
-                    markDirty();
-                  }}
-                  placeholder="Enter full name"
+                  editable={false}
+                  placeholder="Full name"
                   placeholderTextColor="#94A3B8"
-                  style={styles.input}
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
+                  style={[styles.input, styles.readOnlyInput]}
                 />
               </View>
 
@@ -192,28 +212,38 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   editable={false}
                   placeholder="Enter email address"
                   placeholderTextColor="#94A3B8"
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
                   style={[styles.input, styles.readOnlyInput]}
                 />
               </View>
 
-              {/* UPI ID Field */}
+
+              {/* UPI Linked Phone Number to receive Payment Field */}
               <View style={styles.formField}>
                 <View style={styles.fieldLabelRow}>
-                  <Ionicons name="card-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
-                  <Text style={styles.fieldLabel}>UPI ID</Text>
+                  <Ionicons name="wallet-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
+                  <Text style={styles.fieldLabel}>UPI Linked Phone Number to receive Payment</Text>
                   <Text style={styles.asterisk}> *</Text>
                 </View>
                 <TextInput
                   value={upiId}
                   onChangeText={(text) => {
-                    setUpiId(text);
+                    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 10);
+                    setUpiId(cleaned);
                     markDirty();
                   }}
-                  placeholder="Enter UPI ID (e.g. name@oksbi)"
+                  placeholder="Enter 10-digit UPI linked phone number not upi id"
                   placeholderTextColor="#94A3B8"
-                  autoCapitalize="none"
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
                   style={styles.input}
                 />
+                <Text style={styles.fieldHelperText}>
+                  Please enter a valid 10-digit UPI linked phone number not upi id
+                </Text>
               </View>
 
               {/* Bank Account Name Field */}
@@ -230,6 +260,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   }}
                   placeholder="Enter your bank account name (optional)"
                   placeholderTextColor="#94A3B8"
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
                   style={styles.input}
                 />
               </View>
@@ -251,6 +283,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   placeholder="Enter your bank account number (optional)"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
                   style={styles.input}
                 />
               </View>
@@ -270,6 +304,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   placeholder="Enter your bank IFSC code (optional)"
                   placeholderTextColor="#94A3B8"
                   autoCapitalize="characters"
+                  underlineColorAndroid="transparent"
+                  selectionColor="#4361EE"
                   style={styles.input}
                 />
               </View>
@@ -277,19 +313,59 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               {/* Gender Field */}
               <View style={styles.formField}>
                 <View style={styles.fieldLabelRow}>
-                  <Ionicons name="person-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
+                  <Ionicons name="man-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
                   <Text style={styles.fieldLabel}>Gender</Text>
                 </View>
                 <TouchableOpacity
-                  style={styles.dropdownButton}
-                  onPress={() => setShowGenderPicker(true)}
+                  style={[styles.dropdownButton, isGenderOpen && styles.dropdownButtonActive]}
+                  onPress={() => setIsGenderOpen(!isGenderOpen)}
                   activeOpacity={0.8}
                 >
                   <Text style={gender ? styles.dropdownValue : styles.dropdownPlaceholder}>
                     {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Select Gender'}
                   </Text>
-                  <Ionicons name="chevron-down" size={18} color="#64748B" />
+                  <Ionicons
+                    name={isGenderOpen ? 'chevron-up' : 'chevron-down'}
+                    size={18}
+                    color={isGenderOpen ? '#4361EE' : '#64748B'}
+                  />
                 </TouchableOpacity>
+
+                {/* Inline Dropdown Options */}
+                {isGenderOpen && (
+                  <View style={styles.dropdownMenu}>
+                    {['Male', 'Female', 'Other'].map((item, index) => {
+                      const isSelected = gender.toLowerCase() === item.toLowerCase();
+                      const isLast = index === 2;
+                      return (
+                        <TouchableOpacity
+                          key={item}
+                          style={[
+                            styles.dropdownItem,
+                            isSelected && styles.dropdownItemSelected,
+                            isLast && { borderBottomWidth: 0 },
+                          ]}
+                          onPress={() => {
+                            setGender(item.toLowerCase());
+                            markDirty();
+                            setIsGenderOpen(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.dropdownItemText,
+                              isSelected && styles.dropdownItemTextSelected,
+                            ]}
+                          >
+                            {item}
+                          </Text>
+                          {isSelected && <Ionicons name="checkmark" size={18} color="#4361EE" />}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             </View>
 
@@ -304,16 +380,40 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
-                  <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
                   <Text style={styles.saveButtonText}>Save Changes</Text>
                 </>
               )}
+            </TouchableOpacity>
+
+            {/* Cancel Button */}
+            <TouchableOpacity
+              style={styles.cancelEditButton}
+              onPress={handleCancel}
+              activeOpacity={0.7}
+              disabled={saving}
+            >
+              <Text style={styles.cancelEditButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         ) : (
           /* ================= VIEW PROFILE (Screenshots 1 & 4) ================= */
           <View style={styles.profileViewContainer}>
-            <Text style={styles.screenHeading}>My Profile</Text>
+            {/* User Profile Avatar & Identity Header */}
+            <View style={styles.userHeaderContainer}>
+              <View style={styles.avatarWrapper}>
+                {user.picture ? (
+                  <Image source={{ uri: user.picture }} style={styles.userAvatar} />
+                ) : (
+                  <View style={styles.userAvatarFallback}>
+                    <Text style={styles.avatarFallbackText}>
+                      {(fullName || user.name || 'U').charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.activeStatusDot} />
+              </View>
+            </View>
 
             {/* 1. Full Name Card */}
             <View style={styles.infoCard}>
@@ -337,40 +437,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
             </View>
 
-            {/* 3. UPI ID Card */}
+
+            {/* 3. UPI Linked Phone Number to receive Payment Card */}
             <View style={styles.infoCard}>
               <View style={styles.iconBox}>
                 <Ionicons name="wallet-outline" size={18} color="#4361EE" />
               </View>
               <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>UPI ID</Text>
-                <Text style={styles.infoValue}>{upiId || 'UPI ID not set'}</Text>
+                <Text style={styles.infoLabel}>UPI Linked Phone Number to receive Payment</Text>
+                <Text style={styles.infoValue}>{upiId || '10-digit UPI Phone Number not set'}</Text>
               </View>
             </View>
 
-            {/* 4. Phone Number Card */}
-            <View style={styles.infoCard}>
-              <View style={styles.iconBox}>
-                <Ionicons name="call-outline" size={18} color="#4361EE" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Phone Number</Text>
-                <Text style={styles.infoValue}>{phone || '8319250462'}</Text>
-              </View>
-            </View>
-
-            {/* 5. Gender Card */}
-            <View style={styles.infoCard}>
-              <View style={styles.iconBox}>
-                <Ionicons name="man-outline" size={18} color="#4361EE" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Gender</Text>
-                <Text style={styles.infoValue}>{gender || 'male'}</Text>
-              </View>
-            </View>
-
-            {/* 6. Bank Account Name Card */}
+            {/* 5. Bank Account Name Card */}
             <View style={styles.infoCard}>
               <View style={styles.iconBox}>
                 <Ionicons name="business-outline" size={18} color="#4361EE" />
@@ -383,7 +462,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
             </View>
 
-            {/* 7. Bank Account Number Card */}
+            {/* Bank Account Number Card */}
             <View style={styles.infoCard}>
               <View style={styles.iconBox}>
                 <Text style={styles.hashCardIcon}>#</Text>
@@ -396,7 +475,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
             </View>
 
-            {/* 8. Bank IFSC Code Card */}
+            {/* Bank IFSC Code Card */}
             <View style={styles.infoCard}>
               <View style={styles.iconBox}>
                 <Ionicons name="qr-code-outline" size={18} color="#4361EE" />
@@ -405,6 +484,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <Text style={styles.infoLabel}>Bank IFSC Code</Text>
                 <Text style={[styles.infoValue, !bankIfsc && styles.unsetPlaceholder]}>
                   {bankIfsc || 'Bank IFSC Code not set'}
+                </Text>
+              </View>
+            </View>
+
+            {/* 6. Gender Card */}
+            <View style={styles.infoCard}>
+              <View style={styles.iconBox}>
+                <Ionicons name="man-outline" size={18} color="#4361EE" />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>Gender</Text>
+                <Text style={styles.infoValue}>
+                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Male'}
                 </Text>
               </View>
             </View>
@@ -419,60 +511,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={styles.editProfileButtonText}>Edit Profile</Text>
             </TouchableOpacity>
 
-            {/* Subtle Sign Out Option */}
+            {/* Logout Option */}
             <TouchableOpacity
               style={styles.signOutButton}
               onPress={onSignOut}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Ionicons name="log-out-outline" size={16} color="#64748B" style={{ marginRight: 6 }} />
-              <Text style={styles.signOutButtonText}>Sign Out</Text>
+              <Ionicons name="log-out-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.signOutButtonText}>Logout</Text>
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
-      {/* Gender Picker Modal */}
-      <Modal
-        visible={showGenderPicker}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowGenderPicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowGenderPicker(false)}
-        >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Gender</Text>
-              <TouchableOpacity onPress={() => setShowGenderPicker(false)}>
-                <Ionicons name="close" size={22} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-            {['Male', 'Female', 'Other'].map((item) => {
-              const isSelected = gender.toLowerCase() === item.toLowerCase();
-              return (
-                <TouchableOpacity
-                  key={item}
-                  style={[styles.modalOption, isSelected && styles.modalOptionSelected]}
-                  onPress={() => {
-                    setGender(item.toLowerCase());
-                    markDirty();
-                    setShowGenderPicker(false);
-                  }}
-                >
-                  <Text style={[styles.modalOptionText, isSelected && styles.modalOptionTextSelected]}>
-                    {item}
-                  </Text>
-                  {isSelected && <Ionicons name="checkmark" size={20} color="#4361EE" />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+
     </View>
   );
 };
@@ -480,7 +532,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   scrollContent: {
     paddingHorizontal: 16,
@@ -510,12 +562,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#EAA812',
     letterSpacing: -0.5,
-  },
-  brandHeroArrow: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#3A5998',
-    marginLeft: 3,
   },
 
   /* Edit Header */
@@ -553,7 +599,89 @@ const styles = StyleSheet.create({
 
   /* Profile View */
   profileViewContainer: {
-    paddingTop: 16,
+    paddingTop: 8,
+  },
+  /* Profile Avatar Header */
+  userHeaderContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 8,
+    paddingBottom: 14,
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  userAvatar: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    borderWidth: 3,
+    borderColor: '#4361EE',
+    backgroundColor: '#EFF6FF',
+  },
+  userAvatarFallback: {
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: '#4361EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarFallbackText: {
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  activeStatusDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#10B981',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  profileHeaderName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+    marginBottom: 3,
+  },
+  profileHeaderEmail: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  miniAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+  },
+  editAvatarWrapper: {
+    marginBottom: 12,
+  },
+  editAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#EFF6FF',
+  },
+  editAvatarFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#4361EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labelAvatar: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    marginRight: 6,
   },
   screenHeading: {
     fontSize: 24,
@@ -565,7 +693,7 @@ const styles = StyleSheet.create({
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -623,23 +751,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4361EE',
-    borderRadius: 14,
-    paddingVertical: 15,
+    backgroundColor: '#2563EB',
+    borderRadius: 16,
+    height: 52,
     marginTop: 10,
     marginBottom: 12,
     ...Platform.select({
       ios: {
-        shadowColor: '#4361EE',
+        shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
       },
       android: {
         elevation: 4,
       },
       web: {
-        boxShadow: '0 4px 12px rgba(67, 97, 238, 0.3)',
+        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
       },
     }),
   },
@@ -652,13 +780,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: '#DC2626',
+    borderRadius: 16,
+    height: 52,
+    marginTop: 4,
+    marginBottom: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.22,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+      },
+    }),
   },
   signOutButtonText: {
-    color: '#64748B',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
 
   /* Edit View Form */
@@ -720,30 +866,45 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: '700',
   },
+  fieldHelperText: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 6,
+    marginLeft: 4,
+    lineHeight: 16,
+  },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     fontSize: 14,
     color: '#0F172A',
+    ...(Platform.OS === 'web'
+      ? ({
+          outlineStyle: 'none',
+          outlineWidth: 0,
+        } as any)
+      : {}),
   },
   readOnlyInput: {
     backgroundColor: '#F1F5F9',
     color: '#64748B',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    paddingHorizontal: 16,
+    paddingVertical: 13,
   },
   dropdownValue: {
     fontSize: 14,
@@ -758,23 +919,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#4361EE',
-    borderRadius: 14,
-    paddingVertical: 15,
-    marginTop: 6,
-    marginBottom: 24,
+    backgroundColor: '#2563EB',
+    borderRadius: 16,
+    height: 52,
+    marginTop: 10,
+    marginBottom: 6,
     ...Platform.select({
       ios: {
-        shadowColor: '#4361EE',
+        shadowColor: '#2563EB',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 8,
+        shadowOpacity: 0.28,
+        shadowRadius: 10,
       },
       android: {
         elevation: 4,
       },
       web: {
-        boxShadow: '0 4px 12px rgba(67, 97, 238, 0.3)',
+        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
       },
     }),
   },
@@ -782,68 +943,66 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  cancelEditButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    marginBottom: 24,
+  },
+  cancelEditButtonText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '600',
   },
 
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+  /* Dropdown Menu */
+  dropdownButtonActive: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
-  modalContainer: {
-    width: '100%',
-    maxWidth: 340,
+  dropdownMenu: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    marginTop: 6,
+    overflow: 'hidden',
     ...Platform.select({
       ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.15,
-        shadowRadius: 20,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
       },
       android: {
-        elevation: 10,
+        elevation: 3,
       },
       web: {
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.15)',
+        boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
       },
     }),
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  modalOption: {
+  dropdownItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  modalOptionSelected: {
+  dropdownItemSelected: {
     backgroundColor: '#EFF6FF',
   },
-  modalOptionText: {
-    fontSize: 15,
+  dropdownItemText: {
+    fontSize: 14,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
   },
-  modalOptionTextSelected: {
+  dropdownItemTextSelected: {
     color: '#4361EE',
     fontWeight: '700',
   },

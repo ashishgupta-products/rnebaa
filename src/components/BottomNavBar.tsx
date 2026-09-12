@@ -7,6 +7,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TabType } from '../types/navigation';
 
@@ -51,16 +52,6 @@ interface TabButtonProps {
 
 const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
   const pressScaleAnim = useRef(new Animated.Value(1)).current;
-  const indicatorAnim = useRef(new Animated.Value(isActive ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.spring(indicatorAnim, {
-      toValue: isActive ? 1 : 0,
-      useNativeDriver: true,
-      friction: 7,
-      tension: 60,
-    }).start();
-  }, [isActive]);
 
   const handlePressIn = () => {
     Animated.spring(pressScaleAnim, {
@@ -107,15 +98,6 @@ const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
         <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
           {item.label}
         </Text>
-        <Animated.View
-          style={[
-            styles.activeIndicator,
-            {
-              opacity: indicatorAnim,
-              transform: [{ scaleX: indicatorAnim }],
-            },
-          ]}
-        />
       </Animated.View>
     </TouchableOpacity>
   );
@@ -125,8 +107,17 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   currentTab,
   onSelectTab,
 }) => {
+  const insets = useSafeAreaInsets();
+
+  // Dynamically adapt for Gesture/Swipe navigation vs 3-Button navigation:
+  // - Gesture navigation (Android & iOS): insets.bottom > 0 (e.g. 16-34px). We add safe padding above the gesture line.
+  // - 3-button navigation (Android): insets.bottom is 0 (or system bar height). We maintain a clean compact 10px padding.
+  const dynamicPaddingBottom = insets.bottom > 0
+    ? insets.bottom + 4
+    : (Platform.OS === 'ios' ? 14 : 10);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: dynamicPaddingBottom }]}>
       <View style={styles.navBar}>
         {NAV_ITEMS.map((item) => {
           const isActive = currentTab === item.id;
@@ -149,7 +140,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 10,
     paddingTop: 8,
     ...Platform.select({
       ios: {
@@ -200,12 +190,5 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: '#2563EB',
     fontWeight: '700',
-  },
-  activeIndicator: {
-    width: 14,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#2563EB',
-    marginTop: 4,
   },
 });

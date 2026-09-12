@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Campaign } from '../types/campaign';
 import { API_CONFIG } from '../config/authConfig';
 
@@ -58,8 +59,24 @@ async function resolveDirectImageUrl(rawUrl: string): Promise<string> {
   return trimmed;
 }
 
+const CAMPAIGNS_CACHE_KEY = '@cached_campaigns_v1';
+
 // In-memory cache for live campaigns to avoid repetitive network calls and screen re-renders
 let cachedCampaigns: Campaign[] | null = null;
+
+// Eagerly restore campaigns from AsyncStorage on module load for 0ms initial render
+AsyncStorage.getItem(CAMPAIGNS_CACHE_KEY)
+  .then((stored) => {
+    if (stored && !cachedCampaigns) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cachedCampaigns = parsed;
+        }
+      } catch {}
+    }
+  })
+  .catch(() => {});
 
 export function getCachedCampaigns(): Campaign[] | null {
   return cachedCampaigns;
@@ -124,6 +141,7 @@ export async function fetchLiveCampaigns(forceFresh = false): Promise<Campaign[]
     );
 
     cachedCampaigns = campaigns;
+    AsyncStorage.setItem(CAMPAIGNS_CACHE_KEY, JSON.stringify(campaigns)).catch(() => {});
     return campaigns;
   } catch (err) {
     console.error('Error fetching live campaigns from earnbyapps.com:', err);

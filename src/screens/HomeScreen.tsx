@@ -19,32 +19,16 @@ import { CampaignLogo } from '../components/CampaignLogo';
 
 const COIN_STYLE_1 = require('../../assets/coin-style-1.png');
 
-// Blank / Teaser placeholder cards displayed below real offers
+// Teaser placeholder cards
 const DUMMY_COMING_SOON_CARDS = [
-  {
-    id: 'dummy-cs-1',
-    title: 'New Offers Coming Soon',
-    category: 'Verification in progress',
-    icon: 'sparkles-outline' as const,
-    badgeText: 'Coming Soon',
-    badgeIcon: 'time-outline' as const,
-  },
-  {
-    id: 'dummy-cs-2',
-    title: 'More High-Reward Tasks',
-    category: 'Unlocking new partners',
-    icon: 'gift-outline' as const,
-    badgeText: 'Soon',
-    badgeIcon: 'lock-closed-outline' as const,
-  },
-  {
-    id: 'dummy-cs-3',
-    title: 'Surveys & App Testing',
-    category: 'Special bonus campaigns',
-    icon: 'rocket-outline' as const,
-    badgeText: 'Stay Tuned',
-    badgeIcon: 'flash-outline' as const,
-  },
+  { id: 'dummy-cs-1' },
+  { id: 'dummy-cs-2' },
+  { id: 'dummy-cs-3' },
+  { id: 'dummy-cs-4' },
+  { id: 'dummy-cs-5' },
+  { id: 'dummy-cs-6' },
+  { id: 'dummy-cs-7' },
+  { id: 'dummy-cs-8' },
 ];
 
 interface HomeScreenProps {
@@ -130,7 +114,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <View style={styles.brandHeroRow}>
             <Text style={styles.brandHeroBlue}>EarnBy</Text>
             <Text style={styles.brandHeroAmber}>Apps</Text>
-            <Text style={styles.brandHeroArrow}> ↗</Text>
           </View>
           <Text style={styles.brandHeroTagline}>India's Largest Earning App</Text>
         </View>
@@ -140,86 +123,82 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <Text style={styles.sectionTitle}>All Offers!</Text>
         </View>
 
-        {/* Loading State */}
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.loadingText}>Fetching offers from database...</Text>
-          </View>
-        ) : availableCampaigns.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons
-                name={campaigns.length > 0 ? 'checkmark-done-circle' : 'folder-open-outline'}
-                size={38}
-                color={campaigns.length > 0 ? '#10B981' : '#94A3B8'}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>
-              {campaigns.length > 0 ? 'All Caught Up!' : 'No Offers Available'}
-            </Text>
-            <Text style={styles.emptySubtitle}>
-              {campaigns.length > 0
-                ? 'You have submitted proof for all available offers. New tasks will show up here as soon as they are added!'
-                : 'No active offers are currently open in the database. Check back soon!'}
-            </Text>
-            <TouchableOpacity style={styles.refreshButton} onPress={() => loadData(true)}>
-              <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.refreshButtonText}>Refresh Offers</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* Live Campaigns List */
-          <View style={styles.campaignsList}>
-            {availableCampaigns.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={0.9}
-                style={styles.campaignCard}
-                onPress={() => onSelectCampaign(item)}
-              >
-                <View style={styles.cardHeader}>
-                  <CampaignLogo
-                    name={item.name}
-                    logoUrl={item.logoUrl}
-                    size={58}
-                    borderRadius={16}
-                    style={{ marginRight: 14 }}
-                  />
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <Text style={styles.cardCategory}>{item.category}</Text>
-                  </View>
-                  {renderRewardBadge(item)}
+        <View style={styles.campaignsList}>
+          {/* Real Live Campaigns List (On Top) */}
+          {availableCampaigns.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.9}
+              style={styles.campaignCard}
+              onPress={() => onSelectCampaign(item)}
+            >
+              <View style={styles.cardHeader}>
+                <CampaignLogo
+                  name={item.name}
+                  logoUrl={item.logoUrl}
+                  size={58}
+                  borderRadius={16}
+                  style={{ marginRight: 14 }}
+                />
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.cardCategory}>{item.category}</Text>
                 </View>
-              </TouchableOpacity>
-            ))}
+                {renderRewardBadge(item)}
+              </View>
+            </TouchableOpacity>
+          ))}
 
-            {/* Blank / Teaser Placeholder Cards (New Offers Coming Soon) */}
-            {DUMMY_COMING_SOON_CARDS.map((dummy) => (
-              <View key={dummy.id} style={styles.dummyCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.dummyIconBox}>
-                    <Ionicons name={dummy.icon} size={26} color="#94A3B8" />
-                  </View>
-                  <View style={styles.cardInfo}>
-                    <Text style={styles.dummyCardTitle}>{dummy.title}</Text>
-                    <Text style={styles.dummyCardCategory}>{dummy.category}</Text>
-                  </View>
-                  <View style={styles.comingSoonBadge}>
-                    <Ionicons
-                      name={dummy.badgeIcon}
-                      size={12}
-                      color="#64748B"
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={styles.comingSoonText}>{dummy.badgeText}</Text>
-                  </View>
+          {/* Dummy Cards (Below Real Cards) */}
+          {DUMMY_COMING_SOON_CARDS.map((dummy) => (
+            <View key={dummy.id} style={styles.dummyCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.dummyIconBox}>
+                  <Ionicons name="sparkles" size={24} color="#3A5998" />
+                </View>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.dummyCardTitle}>New offers coming soon</Text>
+                </View>
+                <View style={styles.coinRewardRow}>
+                  <Image source={COIN_STYLE_1} style={styles.coinRewardImg} resizeMode="contain" />
                 </View>
               </View>
-            ))}
-          </View>
-        )}
+            </View>
+          ))}
+
+          {/* Inline Loading while fetching real campaigns */}
+          {loading && availableCampaigns.length === 0 && (
+            <View style={styles.loadingBoxInline}>
+              <ActivityIndicator size="small" color="#2563EB" />
+              <Text style={styles.loadingText}>Loading live tasks...</Text>
+            </View>
+          )}
+
+          {/* Empty state if finished loading and no real campaigns are available */}
+          {!loading && availableCampaigns.length === 0 && (
+            <View style={styles.emptyBoxInline}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons
+                  name={campaigns.length > 0 ? 'checkmark-done-circle' : 'folder-open-outline'}
+                  size={32}
+                  color={campaigns.length > 0 ? '#10B981' : '#94A3B8'}
+                />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {campaigns.length > 0 ? 'All Caught Up!' : 'No Active Offers'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {campaigns.length > 0
+                  ? 'You have submitted proof for all available offers. New tasks will show up here as soon as they are added!'
+                  : 'Check back soon for new offers.'}
+              </Text>
+              <TouchableOpacity style={styles.refreshButton} onPress={() => loadData(true)}>
+                <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.refreshButtonText}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -228,7 +207,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   brandHeroContainer: {
     paddingTop: 26,
@@ -252,12 +231,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#EAA812',
     letterSpacing: -0.5,
-  },
-  brandHeroArrow: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#3A5998',
-    marginLeft: 3,
   },
   brandHeroTagline: {
     fontSize: 14,
@@ -285,7 +258,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   campaignCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -357,26 +330,24 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   dummyCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderStyle: 'dashed',
-    opacity: 0.85,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.02,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 6,
       },
       android: {
-        elevation: 1,
+        elevation: 1.5,
       },
       web: {
-        boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
       },
     }),
   },
@@ -384,65 +355,42 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   dummyCardTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#475569',
+    color: '#0F172A',
     letterSpacing: -0.2,
-  },
-  dummyCardCategory: {
-    fontSize: 12,
-    color: '#94A3B8',
-    marginTop: 3,
-  },
-  comingSoonBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 5,
-    paddingHorizontal: 9,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  comingSoonText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
   },
   cardLogoImg: {
     width: 36,
     height: 36,
     borderRadius: 10,
   },
-  loadingBox: {
+  loadingBoxInline: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 48,
-    gap: 12,
+    paddingVertical: 24,
+    gap: 8,
   },
   loadingText: {
     fontSize: 13,
     color: '#64748B',
     fontWeight: '600',
   },
-  emptyBox: {
+  emptyBoxInline: {
     alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginHorizontal: 16,
-    marginTop: 8,
+    marginTop: 4,
   },
   emptyIconCircle: {
     width: 64,

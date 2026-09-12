@@ -116,7 +116,8 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
       // 1. Upload media to Cloudinary
       const uploadRes = await uploadProofImageToCloudinary(
         selectedImage.uri,
-        selectedImage.mimeType
+        selectedImage.mimeType,
+        selectedImage.name
       );
 
       if (!uploadRes.success || !uploadRes.url) {
@@ -195,7 +196,7 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Main Hero Card (Lavender/Blue with Ribbon and Gold Coin) */}
+        {/* Main Hero Card (Exact replica of screenshot) */}
         <View style={styles.heroCard}>
           {/* Top-Right Ribbon Badge */}
           <View style={styles.ribbonBadge}>
@@ -203,27 +204,44 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
           </View>
 
           <View style={styles.heroMainRow}>
-            {/* Left Column: Logo & App Name */}
+            {/* Left Column: Logo & App Name directly below */}
             <View style={styles.heroLeftCol}>
               <View style={styles.logoWrapper}>
                 <CampaignLogo
                   name={campaign.name}
                   logoUrl={campaign.logoUrl}
                   size={52}
-                  borderRadius={12}
+                  borderRadius={14}
                 />
               </View>
-              <Text style={styles.appName} numberOfLines={2}>
+              <Text style={styles.appName}>
                 {campaign.name}
               </Text>
             </View>
 
-            {/* Right Column: Layered Gold Coin Graphic */}
-            <View style={styles.coinContainer}>
-              <View style={styles.coinBackShadow} />
-              <View style={styles.coinOuter}>
-                <View style={styles.coinInner}>
-                  <Text style={styles.coinAmount}>₹{campaign.reward}</Text>
+            {/* Right Column: Layered Gold Coin Graphic (Exact 1:1 match to screenshot) */}
+            <View style={styles.coinWrapper}>
+              <View style={styles.coinBackRim} />
+              <View style={styles.coinOuterRing}>
+                <View style={styles.coinInnerDisc}>
+                  <Text
+                    style={[
+                      styles.coinText,
+                      {
+                        fontSize:
+                          String(campaign.reward || '').length >= 4
+                            ? 13
+                            : String(campaign.reward || '').length >= 3
+                            ? 16
+                            : 21,
+                      },
+                    ]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.7}
+                  >
+                    ₹{campaign.reward}
+                  </Text>
                 </View>
               </View>
             </View>
@@ -279,13 +297,13 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
           </View>
         ) : null}
 
-        {/* Follow This Link Button */}
+        {/* Action Button ("Launch Task") */}
         <TouchableOpacity
-          style={styles.followLinkButton}
+          style={styles.actionOutlineButton}
           onPress={handleFollowLink}
           activeOpacity={0.8}
         >
-          <Text style={styles.followLinkText}>Follow this link</Text>
+          <Text style={styles.actionOutlineText}>Launch Task</Text>
         </TouchableOpacity>
 
         {/* Upload Media Section */}
@@ -320,7 +338,7 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
               activeOpacity={0.7}
             >
               <View style={styles.uploadIconWrap}>
-                <Ionicons name="arrow-up" size={22} color="#0F172A" />
+                <Ionicons name="arrow-up" size={20} color="#0F172A" />
                 <View style={styles.uploadTrayLine} />
               </View>
               <Text style={styles.uploadTitle}>Choose File To Upload</Text>
@@ -388,7 +406,7 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
-    marginRight: 12,
+    marginRight: 14,
   },
   headerTitle: {
     fontSize: 20,
@@ -402,9 +420,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   heroCard: {
-    backgroundColor: '#EEF2FF',
-    borderRadius: 24,
-    padding: 22,
+    backgroundColor: '#EEF4FF',
+    borderRadius: 22,
+    padding: 20,
     position: 'relative',
     overflow: 'hidden',
     marginTop: 4,
@@ -413,10 +431,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#3E54AC',
+    backgroundColor: '#354C96',
     paddingVertical: 5,
     paddingHorizontal: 22,
-    borderTopRightRadius: 24,
+    borderTopRightRadius: 22,
     borderBottomLeftRadius: 16,
   },
   ribbonText: {
@@ -428,85 +446,84 @@ const styles = StyleSheet.create({
   heroMainRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 6,
+    alignItems: 'flex-end',
+    paddingTop: 4,
   },
   heroLeftCol: {
     flex: 1,
-    paddingRight: 16,
+    paddingRight: 14,
   },
   logoWrapper: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
+    width: 62,
+    height: 62,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   appName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#0F172A',
+    lineHeight: 26,
     letterSpacing: -0.3,
   },
-  coinContainer: {
-    width: 76,
+
+  /* Exact 3D layered gold coin from cropped screenshot */
+  coinWrapper: {
+    width: 80,
     height: 76,
-    alignItems: 'center',
-    justifyContent: 'center',
     position: 'relative',
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  coinBackShadow: {
+  coinBackRim: {
     position: 'absolute',
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#EAB308',
-    right: 1,
-    bottom: 2,
+    left: 1,
+    top: 1,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#E58A00', // Deep amber 3D rim visible on the top-left
   },
-  coinOuter: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#FACC15',
-    borderWidth: 4,
-    borderColor: '#EAB308',
+  coinOuterRing: {
+    position: 'absolute',
+    left: 6,
+    top: 3,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FDE047', // Light creamy yellow outer ring
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#CA8A04',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 4,
   },
-  coinInner: {
+  coinInnerDisc: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    borderWidth: 1.5,
-    borderColor: '#EAB308',
+    backgroundColor: '#EAA812', // Rich golden amber inner circular face
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FDE047',
   },
-  coinAmount: {
-    fontSize: 18,
+  coinText: {
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#000000',
+    textAlign: 'center',
     letterSpacing: -0.5,
   },
+
+  /* How to Avail Section */
   sectionContainer: {
     marginTop: 22,
   },
   sectionHeading: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 10,
@@ -521,10 +538,11 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   bulletDot: {
-    fontSize: 16,
-    color: '#1E293B',
+    fontSize: 18,
+    color: '#0F172A',
     lineHeight: 22,
     marginRight: 8,
+    marginTop: -1,
   },
   bulletText: {
     flex: 1,
@@ -533,6 +551,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     fontWeight: '400',
   },
+
+  /* Referral Code Card */
   referralCard: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
@@ -584,7 +604,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   codeText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: 1.5,
@@ -612,55 +632,59 @@ const styles = StyleSheet.create({
   copiedButtonText: {
     color: '#059669',
   },
-  followLinkButton: {
+
+  /* Action Button ("Install this app") */
+  actionOutlineButton: {
     backgroundColor: '#EEF2FF',
     borderWidth: 1.5,
     borderColor: '#4361EE',
-    borderRadius: 14,
-    paddingVertical: 15,
+    borderRadius: 12,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 20,
+    marginTop: 18,
   },
-  followLinkText: {
-    color: '#3B57DB',
+  actionOutlineText: {
+    color: '#4361EE',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
+
+  /* Upload Box */
   uploadBox: {
     backgroundColor: '#EEF2FF',
     borderWidth: 1.5,
     borderColor: '#4361EE',
     borderRadius: 14,
     paddingVertical: 24,
-    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   uploadIconWrap: {
+    width: 28,
+    height: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   uploadTrayLine: {
     width: 20,
-    height: 2.5,
+    height: 2,
     backgroundColor: '#0F172A',
-    borderRadius: 2,
+    borderRadius: 1,
     marginTop: 2,
   },
   uploadTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 4,
   },
   uploadSubtitle: {
     fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-    textAlign: 'center',
+    color: '#475569',
+    marginTop: 4,
   },
+
   previewBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -708,18 +732,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+
+  /* Submit Button */
   submitButton: {
     backgroundColor: '#4361EE',
     borderRadius: 14,
-    paddingVertical: 15,
+    height: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 22,
-    shadowColor: '#4361EE',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 3,
+    marginTop: 20,
+    marginBottom: 36,
   },
   submitButtonDisabled: {
     opacity: 0.7,
