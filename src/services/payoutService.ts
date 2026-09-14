@@ -1,5 +1,5 @@
 import { API_CONFIG } from '../config/authConfig';
-import { getSavedBackendToken, DEFAULT_BACKEND_TOKEN } from './backendAuthService';
+import { getSavedBackendToken } from './backendAuthService';
 
 export interface PayoutRequestPayload {
   amount: number;
@@ -52,15 +52,6 @@ export async function requestPayout(
       body: JSON.stringify(body),
     });
 
-    if (res.status === 401 || res.status === 403) {
-      headers['Authorization'] = `Bearer ${DEFAULT_BACKEND_TOKEN}`;
-      res = await fetch(`${API_CONFIG.baseUrl}/api/payouts`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-    }
-
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok || data.success === false) {
@@ -98,6 +89,7 @@ export async function requestPayout(
 export async function fetchUserPayouts(
   userEmail?: string
 ): Promise<PayoutItem[]> {
+  if (!userEmail) return [];
   try {
     const token = await getSavedBackendToken();
     const headers: Record<string, string> = {
@@ -107,15 +99,9 @@ export async function fetchUserPayouts(
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const url = userEmail
-      ? `${API_CONFIG.baseUrl}/api/payouts?email=${encodeURIComponent(userEmail.trim())}`
-      : `${API_CONFIG.baseUrl}/api/payouts`;
+    const url = `${API_CONFIG.baseUrl}/api/payouts?email=${encodeURIComponent(userEmail.trim())}`;
 
     let res = await fetch(url, { headers });
-    if (res.status === 401 || res.status === 403) {
-      headers['Authorization'] = `Bearer ${DEFAULT_BACKEND_TOKEN}`;
-      res = await fetch(url, { headers });
-    }
 
     if (!res.ok) {
       console.warn(`Payouts fetch failed with HTTP ${res.status}`);

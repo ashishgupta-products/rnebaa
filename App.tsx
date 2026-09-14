@@ -8,7 +8,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+        <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
         <AuthScreen />
       </ErrorBoundary>
     </SafeAreaProvider>

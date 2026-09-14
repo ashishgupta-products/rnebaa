@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { TabType } from '../types/navigation';
+import { ModernHomeIcon } from './ModernHomeIcon';
 
 interface BottomNavBarProps {
   currentTab: TabType;
@@ -35,6 +36,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'History',
     activeIcon: 'time',
     inactiveIcon: 'time-outline',
+  },
+  {
+    id: 'instant',
+    label: 'Instant',
+    activeIcon: 'flash',
+    inactiveIcon: 'flash-outline',
   },
   {
     id: 'profile',
@@ -89,11 +96,19 @@ const TabButton: React.FC<TabButtonProps> = ({ item, isActive, onPress }) => {
         ]}
       >
         <View style={styles.iconContainer}>
-          <Ionicons
-            name={isActive ? item.activeIcon : item.inactiveIcon}
-            size={23}
-            color={isActive ? '#2563EB' : '#94A3B8'}
-          />
+          {item.id === 'home' ? (
+            <ModernHomeIcon
+              size={23}
+              color={isActive ? '#2563EB' : '#94A3B8'}
+              isActive={isActive}
+            />
+          ) : (
+            <Ionicons
+              name={isActive ? item.activeIcon : item.inactiveIcon}
+              size={23}
+              color={isActive ? '#2563EB' : '#94A3B8'}
+            />
+          )}
         </View>
         <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
           {item.label}
@@ -160,7 +175,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 8,
   },
   tabButton: {
     flex: 1,
@@ -172,7 +187,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 2,
-    paddingHorizontal: 12,
+    paddingHorizontal: 4,
   },
   iconContainer: {
     width: 28,

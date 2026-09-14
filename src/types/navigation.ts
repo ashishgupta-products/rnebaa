@@ -1,4 +1,4 @@
-export type TabType = 'home' | 'history' | 'profile';
+export type TabType = 'home' | 'instant' | 'history' | 'profile';
 
 export interface TabItem {
   key: TabType;

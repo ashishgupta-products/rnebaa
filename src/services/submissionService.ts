@@ -1,13 +1,14 @@
 import { Platform } from 'react-native';
 import { API_CONFIG } from '../config/authConfig';
 import { TaskHistoryItem } from '../types/campaign';
-import { getSavedBackendToken, DEFAULT_BACKEND_TOKEN } from './backendAuthService';
+import { getSavedBackendToken } from './backendAuthService';
 
 /**
  * Service to interact with the live production submissions and upload APIs (earnbyapps.com).
  * Pulls and stores genuine user submissions from Neon PostgreSQL and saves screenshots to Cloudinary.
  */
 export async function fetchUserSubmissions(userEmail?: string): Promise<TaskHistoryItem[]> {
+  if (!userEmail) return [];
   try {
     const token = await getSavedBackendToken();
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -15,18 +16,8 @@ export async function fetchUserSubmissions(userEmail?: string): Promise<TaskHist
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const url = userEmail
-      ? `${API_CONFIG.baseUrl}/api/submissions?userEmail=${encodeURIComponent(userEmail.trim())}`
-      : `${API_CONFIG.baseUrl}/api/submissions`;
-
-    let res = await fetch(url, {
-      headers,
-    });
-
-    if (res.status === 401 || res.status === 403) {
-      headers['Authorization'] = `Bearer ${DEFAULT_BACKEND_TOKEN}`;
-      res = await fetch(url, { headers });
-    }
+    const url = `${API_CONFIG.baseUrl}/api/submissions?userEmail=${encodeURIComponent(userEmail.trim())}`;
+    const res = await fetch(url, { headers });
 
     if (!res.ok) {
       console.warn(`Submissions fetch failed: HTTP ${res.status}`);
@@ -151,10 +142,10 @@ export async function uploadProofImageToCloudinary(
 
       xhr.send(formData);
     } catch (err: any) {
-      console.error('Cloudinary upload error:', err);
+      console.error('Upload error:', err);
       resolve({
         success: false,
-        error: err.message || 'Failed to upload screenshot to Cloudinary',
+        error: err.message || 'Failed to upload screenshot. Please try again.',
       });
     }
   });
@@ -219,15 +210,6 @@ export async function submitTaskProof(
       headers,
       body: JSON.stringify(body),
     });
-
-    if (res.status === 401 || res.status === 403) {
-      headers['Authorization'] = `Bearer ${DEFAULT_BACKEND_TOKEN}`;
-      res = await fetch(`${API_CONFIG.baseUrl}/api/submissions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-      });
-    }
 
     if (!res.ok) {
       const errJson = await res.json().catch(() => ({}));

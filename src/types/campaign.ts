@@ -17,6 +17,7 @@ export interface Campaign {
   actionText?: string;
   videoUrl?: string;
   isActive?: boolean;
+  isIndependent?: boolean;
 }
 
 export interface TaskHistoryItem {

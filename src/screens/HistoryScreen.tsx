@@ -56,41 +56,14 @@ interface UnifiedTransaction {
   method?: string;
 }
 
-const STORAGE_WITHDRAWALS_KEY = '@earnbyapps_withdrawal_requests';
+const getWithdrawalsStorageKey = (email?: string) => {
+  const clean = (email || '').toLowerCase().trim();
+  return clean ? `@earnbyapps_withdrawal_requests_${clean}` : '@earnbyapps_withdrawal_requests';
+};
 
-// Real verified submissions from PostgreSQL database for the user
-const DEFAULT_USER_SUBMISSIONS: TaskHistoryItem[] = [
-  {
-    id: 'sub-1789159186078-aujolp3',
-    appName: 'Swagbucks India Surveys',
-    reward: 100,
-    status: 'Paid',
-    date: 'Sep 11, 2026, 08:39 PM',
-    proofType: 'image',
-    proofUrl: 'https://res.cloudinary.com/s2decpps/image/upload/v1789159184/earnbyapps_proofs/v5aywicxhs9ezbrfnv6z.jpg',
-    appId: 'swagbucks-in',
-  },
-];
-
-// Real withdrawal requests (Processed payout from PostgreSQL + current pending withdrawal)
-const DEFAULT_WITHDRAWALS: WithdrawalRequest[] = [
-  {
-    id: 'payout-1789164724796-ppyfs',
-    amount: 50,
-    method: 'UPI',
-    account: 'aashish.gupta.mails@oksbi',
-    status: 'Processed',
-    date: '11 Sept 2026, 10:12 pm',
-  },
-  {
-    id: 'WD-PENDING-50',
-    amount: 50,
-    method: 'UPI',
-    account: 'aashish.gupta.mails@oksbi',
-    status: 'Pending',
-    date: 'Today at 08:35 PM',
-  },
-];
+// No hardcoded default submissions or withdrawals - loaded cleanly per user account
+const DEFAULT_USER_SUBMISSIONS: TaskHistoryItem[] = [];
+const DEFAULT_WITHDRAWALS: WithdrawalRequest[] = [];
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   user,
@@ -99,12 +72,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   onRefreshUser,
 }) => {
   const [filter, setFilter] = useState<'all' | 'added_to_wallet' | 'pending' | 'rejected'>('all');
-  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>(() => {
-    return DEFAULT_WITHDRAWALS;
-  });
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(() => {
-    const clean = (submissions || []).filter((s) => !s.id?.startsWith('h-'));
-    return clean.length > 0 ? clean : DEFAULT_USER_SUBMISSIONS;
+    return (submissions || []).filter((s) => !s.id?.startsWith('h-'));
   });
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -143,37 +113,27 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   // Load stored withdrawals from local cache and sync with live database
   const loadWithdrawalRequests = async () => {
     try {
+      const storageKey = getWithdrawalsStorageKey(user.email);
       let currentList: WithdrawalRequest[] = [];
-      const stored = await AsyncStorage.getItem(STORAGE_WITHDRAWALS_KEY);
+      const stored = await AsyncStorage.getItem(storageKey);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
+          if (Array.isArray(parsed)) {
             currentList = parsed;
             setWithdrawalRequests(parsed);
           }
         } catch {}
+      } else {
+        setWithdrawalRequests([]);
       }
 
-      if (currentList.length === 0) {
-        currentList = DEFAULT_WITHDRAWALS;
-        setWithdrawalRequests(DEFAULT_WITHDRAWALS);
-      }
-
-      const remote = await fetchUserPayouts(user.email);
-      if (remote && remote.length > 0) {
-        // Merge remote payouts with local list by id (preserving any pending local withdrawals)
-        const merged = [...currentList];
-        remote.forEach((r) => {
-          const idx = merged.findIndex((m) => m.id === r.id);
-          if (idx >= 0) {
-            merged[idx] = r;
-          } else {
-            merged.push(r);
-          }
-        });
-        setWithdrawalRequests(merged);
-        await AsyncStorage.setItem(STORAGE_WITHDRAWALS_KEY, JSON.stringify(merged));
+      if (user.email) {
+        const remote = await fetchUserPayouts(user.email);
+        if (Array.isArray(remote)) {
+          setWithdrawalRequests(remote);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(remote));
+        }
       }
     } catch (e) {
       console.warn('Error loading withdrawal requests:', e);
@@ -189,21 +149,19 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(parsed)) {
               const clean = parsed.filter((s: any) => !s.id?.startsWith('h-'));
-              if (clean.length > 0) {
-                setHistoryItems(clean);
-              }
+              setHistoryItems(clean);
             }
           } catch {}
         }
       }
 
       // 2. Refresh live from server
-      const live = await fetchUserSubmissions(user.email);
-      if (Array.isArray(live) && live.length > 0) {
-        const clean = live.filter((s) => !s.id?.startsWith('h-'));
-        if (clean.length > 0) {
+      if (user.email) {
+        const live = await fetchUserSubmissions(user.email);
+        if (Array.isArray(live)) {
+          const clean = live.filter((s) => !s.id?.startsWith('h-'));
           setHistoryItems(clean);
           if (emailKey) {
             await AsyncStorage.setItem(`@user_submissions_${emailKey}`, JSON.stringify(clean));
@@ -322,8 +280,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
         date: new Date().toISOString().replace('T', ' at ').slice(0, 19),
       };
 
+      const storageKey = getWithdrawalsStorageKey(user.email);
       const updated = [newReq, ...withdrawalRequests.filter((w) => w.id !== newReq.id)];
-      await AsyncStorage.setItem(STORAGE_WITHDRAWALS_KEY, JSON.stringify(updated));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
       setWithdrawalRequests(updated);
       setShowWithdrawModal(false);
       setWithdrawAmount('');
@@ -422,6 +381,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   return (
     <View style={styles.container}>
+      {/* Fixed Top Brand Header (stays pinned while wallet history scrolls) */}
+      <View style={styles.header}>
+        <BrandLogo fontSize={28} />
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -429,11 +393,6 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Top Centered Brand Logo */}
-        <View style={styles.header}>
-          <BrandLogo fontSize={28} />
-        </View>
-
         {/* Hero Blue Wallet Card (Matching Screenshot 2) */}
         <View style={styles.blueHeroCard}>
           {/* Card Top Row: Label & "Withdraw History >" */}
@@ -806,10 +765,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    paddingTop: 26,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
   },
   scrollContent: {
     paddingBottom: 36,

@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../types/auth';
@@ -20,12 +21,15 @@ interface ProfileScreenProps {
   onSignOut: () => void;
   onUpdateUser?: (updated: UserProfile) => void;
   onRequestEdit?: boolean;
+  isActive?: boolean;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   user,
   onSignOut,
   onUpdateUser,
+  onRequestEdit = false,
+  isActive = true,
 }) => {
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
@@ -37,15 +41,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const digits = fallbackPhone.replace(/\D/g, '');
       if (digits.length >= 10) return digits.slice(-10);
     }
-    return '8319250462';
+    return '';
+  };
+
+  const resolveGender = (rawGender?: string, userId?: string) => {
+    if (!rawGender) return '';
+    if (userId === 'demo-user-id' && rawGender.toLowerCase() === 'male') return '';
+    return rawGender;
   };
 
   // Form states
-  const [fullName, setFullName] = useState<string>(user.name || 'Ashish Gupta');
-  const [email, setEmail] = useState<string>(user.email || 'aashish.gupta.mails@gmail.com');
+  const [fullName, setFullName] = useState<string>(user.name || '');
+  const [email, setEmail] = useState<string>(user.email || '');
   const [upiId, setUpiId] = useState<string>(resolveUpiNumber(user.upiId, user.phoneNumber));
-  const [phone, setPhone] = useState<string>(user.phoneNumber || '8319250462');
-  const [gender, setGender] = useState<string>(user.gender || 'male');
+  const [phone, setPhone] = useState<string>(user.phoneNumber || '');
+  const [gender, setGender] = useState<string>(resolveGender(user.gender, user.id));
   const [bankName, setBankName] = useState<string>(user.bankAccountName || '');
   const [bankAccountNumber, setBankAccountNumber] = useState<string>(user.bankAccountNumber || '');
   const [bankIfsc, setBankIfsc] = useState<string>(user.bankIfscCode || '');
@@ -55,11 +65,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // Sync state if user prop changes
   useEffect(() => {
-    setFullName(user.name || 'Ashish Gupta');
-    setEmail(user.email || 'aashish.gupta.mails@gmail.com');
+    setFullName(user.name || '');
+    setEmail(user.email || '');
     setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
-    setPhone(user.phoneNumber || '8319250462');
-    setGender(user.gender || 'male');
+    setPhone(user.phoneNumber || '');
+    setGender(resolveGender(user.gender, user.id));
     setBankName(user.bankAccountName || '');
     setBankAccountNumber(user.bankAccountNumber || '');
     setBankIfsc(user.bankIfscCode || '');
@@ -73,11 +83,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleCancel = () => {
     // Reset to user values
-    setFullName(user.name || 'Ashish Gupta');
-    setEmail(user.email || 'aashish.gupta.mails@gmail.com');
+    setFullName(user.name || '');
+    setEmail(user.email || '');
     setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
-    setPhone(user.phoneNumber || '8319250462');
-    setGender(user.gender || 'male');
+    setPhone(user.phoneNumber || '');
+    setGender(resolveGender(user.gender, user.id));
     setBankName(user.bankAccountName || '');
     setBankAccountNumber(user.bankAccountNumber || '');
     setBankIfsc(user.bankIfscCode || '');
@@ -85,6 +95,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsDirty(false);
     setIsEditing(false);
   };
+
+  // Intercept Android hardware back button / back swipe when in Edit mode
+  useEffect(() => {
+    if (!isEditing || !isActive) return;
+
+    const onBackPress = () => {
+      handleCancel();
+      return true; // Consume back event, exit edit mode and stay on Profile tab
+    };
+
+    const backSubscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backSubscription.remove();
+  }, [isEditing, isActive]);
+
+  // If user navigates away to another bottom tab while in edit mode, reset back to view mode
+  useEffect(() => {
+    if (!isActive && isEditing) {
+      handleCancel();
+    }
+  }, [isActive]);
 
   const handleSave = async () => {
     if (!fullName.trim()) {
@@ -126,8 +156,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Top Header only when editing */}
-      {isEditing && (
+      {isEditing ? (
         <View style={styles.editHeader}>
           <TouchableOpacity
             onPress={handleCancel}
@@ -145,21 +174,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={{ width: 60 }} />
           )}
         </View>
+      ) : (
+        /* Fixed Top Brand Header (stays pinned while profile scrolls) */
+        <View style={styles.brandHeroContainer}>
+          <View style={styles.brandHeroRow}>
+            <Text style={styles.brandHeroBlue}>EarnBy</Text>
+            <Text style={styles.brandHeroAmber}>Apps</Text>
+          </View>
+        </View>
       )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {!isEditing && (
-          /* Unboxed Brand Hero without Tagline */
-          <View style={styles.brandHeroContainer}>
-            <View style={styles.brandHeroRow}>
-              <Text style={styles.brandHeroBlue}>EarnBy</Text>
-              <Text style={styles.brandHeroAmber}>Apps</Text>
-            </View>
-          </View>
-        )}
         {isEditing ? (
           /* ================= EDIT PROFILE VIEW (Screenshots 3 & 5) ================= */
           <View style={styles.editContainer}>
@@ -422,7 +450,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Full Name</Text>
-                <Text style={styles.infoValue}>{fullName || user.name || 'Ashish Gupta'}</Text>
+                <Text style={styles.infoValue}>{fullName || user.name || 'User'}</Text>
               </View>
             </View>
 
@@ -433,7 +461,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Email Address</Text>
-                <Text style={styles.infoValue}>{email || user.email || 'aashish.gupta.mails@gmail.com'}</Text>
+                <Text style={styles.infoValue}>{email || user.email || 'Email not set'}</Text>
               </View>
             </View>
 
@@ -495,8 +523,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Gender</Text>
-                <Text style={styles.infoValue}>
-                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Male'}
+                <Text style={[styles.infoValue, !gender && styles.unsetPlaceholder]}>
+                  {gender ? gender.charAt(0).toUpperCase() + gender.slice(1) : 'Gender not set'}
                 </Text>
               </View>
             </View>
@@ -541,10 +569,12 @@ const styles = StyleSheet.create({
 
   /* Unboxed Brand Hero */
   brandHeroContainer: {
-    paddingTop: 26,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
   },
   brandHeroRow: {
     flexDirection: 'row',

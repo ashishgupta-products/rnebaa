@@ -23,6 +23,7 @@ interface TaskDetailsScreenProps {
   userName?: string;
   userEmail?: string;
   isAlreadySubmitted?: boolean;
+  isIndependent?: boolean;
   onBack: () => void;
   onSubmitProof: (item: TaskHistoryItem) => void;
 }
@@ -33,9 +34,11 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
   userName = 'User',
   userEmail = '',
   isAlreadySubmitted = false,
+  isIndependent = false,
   onBack,
   onSubmitProof,
 }) => {
+  const isDirect = Boolean(campaign.isIndependent || isIndependent);
   const [selectedImage, setSelectedImage] = useState<{ uri: string; mimeType?: string; name?: string } | null>(null);
   const [submitted, setSubmitted] = useState<boolean>(isAlreadySubmitted);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -107,13 +110,13 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
 
     setErrorMsg(null);
     setIsSubmitting(true);
-    setUploadProgressText('Uploading media to Cloudinary...');
+    setUploadProgressText('Submitting proof...');
 
     try {
       let uploadedUrl: string | undefined = undefined;
       let uploadedPublicId: string = 'media_proof';
 
-      // 1. Upload media to Cloudinary
+      // 1. Upload proof media
       const uploadRes = await uploadProofImageToCloudinary(
         selectedImage.uri,
         selectedImage.mimeType,
@@ -121,14 +124,14 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
       );
 
       if (!uploadRes.success || !uploadRes.url) {
-        throw new Error(uploadRes.error || 'Failed to upload media to Cloudinary');
+        throw new Error(uploadRes.error || 'Failed to upload screenshot. Please try again.');
       }
 
       uploadedUrl = uploadRes.url;
       uploadedPublicId = uploadRes.publicId || uploadedPublicId;
 
       // 2. Submit to backend
-      setUploadProgressText('Saving submission...');
+      setUploadProgressText('Submitting proof...');
       const res = await submitTaskProof({
         userName,
         userEmail,
@@ -163,9 +166,16 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l.length > 0);
-      if (lines.length > 1) {
+      if (lines.length >= 1) {
         return lines.map((l) => (l.startsWith('•') || l.startsWith('-') ? l.replace(/^[-•]\s*/, '') : l));
       }
+    }
+    if (isDirect) {
+      return [
+        `Install the ${campaign.name} App`,
+        campaign.referralCode ? `Sign up using referral code: ${campaign.referralCode}` : 'Complete the signup in the app.',
+        'Get your reward credited directly by the app!',
+      ];
     }
     return [
       `Install the ${campaign.name} App`,
@@ -297,95 +307,117 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
           </View>
         ) : null}
 
-        {/* Action Button ("Launch Task") */}
+        {/* Action Button ("Start") */}
         <TouchableOpacity
-          style={styles.actionOutlineButton}
+          style={[styles.actionOutlineButton, isDirect && styles.actionPrimaryButton]}
           onPress={handleFollowLink}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Text style={styles.actionOutlineText}>Launch Task</Text>
+          {isDirect && (
+            <Ionicons name="open-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+          )}
+          <Text style={[styles.actionOutlineText, isDirect && styles.actionPrimaryText]}>
+            Start
+          </Text>
         </TouchableOpacity>
 
-        {/* Upload Media Section */}
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionHeading}>Upload Media</Text>
+        {/* Direct Payout Info Box (For independent apps only) */}
+        {isDirect && (
+          <View style={styles.directNoticeCard}>
+            <View style={styles.directNoticeHeader}>
+              <Ionicons name="checkmark-circle" size={18} color="#059669" />
+              <Text style={styles.directNoticeTitle}>Paid Directly by App</Text>
+            </View>
+            <Text style={styles.directNoticeText}>
+              This app credits your reward directly to your account. Copy the code above, complete your registration in the app, and get rewarded directly. No screenshot or proof submission needed on EarnByApps.
+            </Text>
+          </View>
+        )}
 
-          {selectedImage ? (
-            <View style={styles.previewBox}>
-              <Image
-                source={{ uri: selectedImage.uri }}
-                style={styles.previewImg}
-                resizeMode="cover"
-              />
-              <View style={styles.previewMeta}>
-                <Text style={styles.previewFileName} numberOfLines={1}>
-                  {selectedImage.name || 'Proof Media Attached'}
-                </Text>
-                <Text style={styles.previewStatus}>Ready to submit</Text>
+        {/* Upload Media Section - ONLY for regular campaigns */}
+        {!isDirect && (
+          <View style={styles.sectionContainer}>
+            <Text style={styles.sectionHeading}>Upload Media</Text>
+
+            {selectedImage ? (
+              <View style={styles.previewBox}>
+                <Image
+                  source={{ uri: selectedImage.uri }}
+                  style={styles.previewImg}
+                  resizeMode="cover"
+                />
+                <View style={styles.previewMeta}>
+                  <Text style={styles.previewFileName} numberOfLines={1}>
+                    {selectedImage.name || 'Proof Media Attached'}
+                  </Text>
+                  <Text style={styles.previewStatus}>Ready to submit</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedImage(null)}
+                  style={styles.removeBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={24} color="#EF4444" />
+                </TouchableOpacity>
               </View>
+            ) : (
               <TouchableOpacity
-                onPress={() => setSelectedImage(null)}
-                style={styles.removeBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.uploadBox}
+                onPress={handlePickFile}
+                activeOpacity={0.7}
               >
-                <Ionicons name="close-circle" size={24} color="#EF4444" />
+                <View style={styles.uploadIconWrap}>
+                  <Ionicons name="arrow-up" size={20} color="#0F172A" />
+                  <View style={styles.uploadTrayLine} />
+                </View>
+                <Text style={styles.uploadTitle}>Choose File To Upload</Text>
+                <Text style={styles.uploadSubtitle}>
+                  (Supports MP4, JPG, PNG and JPEG up to 20MB)
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {errorMsg && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color="#DC2626" />
+                <Text style={styles.errorText}>{errorMsg}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Submit Action Button - ONLY for regular campaigns */}
+        {!isDirect && (
+          submitted ? (
+            <View style={styles.successBox}>
+              <Ionicons name="checkmark-circle" size={26} color="#15803D" />
+              <Text style={styles.successTitle}>Proof Submitted Successfully!</Text>
+              <Text style={styles.successSub}>
+                Your proof is in verification. You will be credited ₹ {campaign.reward} upon confirmation.
+              </Text>
+              <TouchableOpacity style={styles.backToOffersBtn} onPress={onBack}>
+                <Text style={styles.backToOffersText}>Return to Offers</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.uploadBox}
-              onPress={handlePickFile}
-              activeOpacity={0.7}
+              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              activeOpacity={0.85}
             >
-              <View style={styles.uploadIconWrap}>
-                <Ionicons name="arrow-up" size={20} color="#0F172A" />
-                <View style={styles.uploadTrayLine} />
-              </View>
-              <Text style={styles.uploadTitle}>Choose File To Upload</Text>
-              <Text style={styles.uploadSubtitle}>
-                (Supports MP4, JPG, PNG and JPEG up to 20MB)
-              </Text>
+              {isSubmitting ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.submitButtonText}>
+                    {uploadProgressText || 'Submitting...'}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.submitButtonText}>Submit</Text>
+              )}
             </TouchableOpacity>
-          )}
-
-          {errorMsg && (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={16} color="#DC2626" />
-              <Text style={styles.errorText}>{errorMsg}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Submit Action Button */}
-        {submitted ? (
-          <View style={styles.successBox}>
-            <Ionicons name="checkmark-circle" size={26} color="#15803D" />
-            <Text style={styles.successTitle}>Proof Submitted Successfully!</Text>
-            <Text style={styles.successSub}>
-              Your proof is in verification. You will be credited ₹ {campaign.reward} upon confirmation.
-            </Text>
-            <TouchableOpacity style={styles.backToOffersBtn} onPress={onBack}>
-              <Text style={styles.backToOffersText}>Return to Offers</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-            activeOpacity={0.85}
-          >
-            {isSubmitting ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-                <Text style={styles.submitButtonText}>
-                  {uploadProgressText || 'Submitting...'}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.submitButtonText}>Submit</Text>
-            )}
-          </TouchableOpacity>
+          )
         )}
       </ScrollView>
     </View>
@@ -401,7 +433,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingTop: 12,
+    paddingBottom: 14,
     backgroundColor: '#FFFFFF',
   },
   backButton: {
@@ -640,6 +673,7 @@ const styles = StyleSheet.create({
     borderColor: '#4361EE',
     borderRadius: 12,
     height: 50,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 18,
@@ -648,6 +682,41 @@ const styles = StyleSheet.create({
     color: '#4361EE',
     fontSize: 16,
     fontWeight: '600',
+  },
+  actionPrimaryButton: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+    flexDirection: 'row',
+  },
+  actionPrimaryText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  directNoticeCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: 16,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  directNoticeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  directNoticeTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  directNoticeText: {
+    fontSize: 13,
+    color: '#15803D',
+    lineHeight: 19,
+    fontWeight: '500',
   },
 
   /* Upload Box */

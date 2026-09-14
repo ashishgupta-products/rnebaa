@@ -16,25 +16,21 @@ import { UserProfile } from '../types/auth';
 import { Campaign, TaskHistoryItem } from '../types/campaign';
 import { fetchLiveCampaigns, getCachedCampaigns } from '../services/campaignService';
 import { CampaignLogo } from '../components/CampaignLogo';
+import { TabType } from '../types/navigation';
 
 const COIN_STYLE_1 = require('../../assets/coin-style-1.png');
 
-// Teaser placeholder cards
+// Teaser placeholder cards (3 coming soon teaser cards)
 const DUMMY_COMING_SOON_CARDS = [
   { id: 'dummy-cs-1' },
   { id: 'dummy-cs-2' },
   { id: 'dummy-cs-3' },
-  { id: 'dummy-cs-4' },
-  { id: 'dummy-cs-5' },
-  { id: 'dummy-cs-6' },
-  { id: 'dummy-cs-7' },
-  { id: 'dummy-cs-8' },
 ];
 
 interface HomeScreenProps {
   user: UserProfile;
   userSubmissions?: TaskHistoryItem[];
-  onNavigateToTab: (tab: 'history' | 'profile') => void;
+  onNavigateToTab: (tab: TabType) => void;
   onSelectCampaign: (campaign: Campaign) => void;
 }
 
@@ -92,16 +88,47 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   const renderRewardBadge = (item: Campaign) => {
+    const rewardStr = String(item.reward || '');
     return (
-      <View style={styles.coinRewardRow}>
-        <Image source={COIN_STYLE_1} style={styles.coinRewardImg} resizeMode="contain" />
-        <Text style={styles.coinRewardText}>{item.reward}</Text>
+      <View style={styles.coinWrapper}>
+        <View style={styles.coinBackRim} />
+        <View style={styles.coinOuterRing}>
+          <View style={styles.coinInnerDisc}>
+            <Text
+              style={[
+                styles.coinText,
+                {
+                  fontSize:
+                    rewardStr.length >= 4
+                      ? 12
+                      : rewardStr.length >= 3
+                      ? 14
+                      : 16,
+                },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            >
+              ₹{item.reward}
+            </Text>
+          </View>
+        </View>
       </View>
     );
   };
 
   return (
     <View style={styles.container}>
+      {/* Fixed Brand Hero Header (stays pinned while offers scroll) */}
+      <View style={styles.brandHeroContainer}>
+        <View style={styles.brandHeroRow}>
+          <Text style={styles.brandHeroBlue}>EarnBy</Text>
+          <Text style={styles.brandHeroAmber}>Apps</Text>
+        </View>
+        <Text style={styles.brandHeroTagline}>India's Largest Earning App</Text>
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -109,15 +136,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Unboxed Brand Hero with Tagline */}
-        <View style={styles.brandHeroContainer}>
-          <View style={styles.brandHeroRow}>
-            <Text style={styles.brandHeroBlue}>EarnBy</Text>
-            <Text style={styles.brandHeroAmber}>Apps</Text>
-          </View>
-          <Text style={styles.brandHeroTagline}>India's Largest Earning App</Text>
-        </View>
-
         {/* Section Header */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>All Offers!</Text>
@@ -210,10 +228,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   brandHeroContainer: {
-    paddingTop: 26,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
   },
   brandHeroRow: {
     flexDirection: 'row',
@@ -237,7 +257,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
     marginTop: 5,
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   scrollContent: {
     paddingBottom: 24,
@@ -311,6 +331,47 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     marginTop: 3,
+  },
+  coinWrapper: {
+    width: 68,
+    height: 64,
+    position: 'relative',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  coinBackRim: {
+    position: 'absolute',
+    left: 1,
+    top: 1,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E58A00', // Deep amber 3D rim visible on the top-left
+  },
+  coinOuterRing: {
+    position: 'absolute',
+    left: 5,
+    top: 2.5,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FDE047', // Light creamy yellow outer ring
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinInnerDisc: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EAA812', // Rich golden amber inner circular face
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinText: {
+    fontWeight: '900',
+    color: '#000000',
+    textAlign: 'center',
+    letterSpacing: -0.5,
   },
   coinRewardRow: {
     flexDirection: 'row',

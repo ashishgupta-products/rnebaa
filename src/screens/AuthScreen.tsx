@@ -18,10 +18,12 @@ import { BrandLogo } from '../components/BrandLogo';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { BottomNavBar } from '../components/BottomNavBar';
 import { HomeScreen } from './HomeScreen';
+import { InstantScreen } from './InstantScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { TaskDetailsScreen } from './TaskDetailsScreen';
 import { TabType } from '../types/navigation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { UserProfile } from '../types/auth';
 import { Campaign, TaskHistoryItem } from '../types/campaign';
 import {
@@ -55,6 +57,11 @@ export const AuthScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [splashAnim] = useState(() => new Animated.Value(1));
 
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 0, 42)
+    : (insets.top > 0 ? insets.top : 44);
+
   const isConfigured = isPlatformConfigured();
 
   // Load existing session and cached submissions concurrently before dismissing splash
@@ -83,21 +90,6 @@ export const AuthScreen: React.FC = () => {
               }
             } catch {}
           }
-        }
-
-        if (initialSubmissions.length === 0 && savedUser?.email?.toLowerCase().includes('aashish')) {
-          initialSubmissions = [
-            {
-              id: 'sub-1789159186078-aujolp3',
-              appName: 'Swagbucks India Surveys',
-              reward: 100,
-              status: 'Paid',
-              date: 'Sep 11, 2026, 08:39 PM',
-              proofType: 'image',
-              proofUrl: 'https://res.cloudinary.com/s2decpps/image/upload/v1789159184/earnbyapps_proofs/v5aywicxhs9ezbrfnv6z.jpg',
-              appId: 'swagbucks-in',
-            },
-          ];
         }
 
         if (!isMounted) return;
@@ -284,6 +276,7 @@ export const AuthScreen: React.FC = () => {
     }
     await clearUserSession();
     setUser(null);
+    setUserSubmissions([]);
     setActiveTab('home');
   };
 
@@ -297,10 +290,10 @@ export const AuthScreen: React.FC = () => {
 
   return (
     <View style={styles.rootContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" translucent={false} />
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent={true} />
 
       {user ? (
-        <View style={styles.mainContainer}>
+        <View style={[styles.mainContainer, { paddingTop: topInset }]}>
           {/* Main Tab Screens - kept mounted in memory to preserve state, scroll, and prevent reloading */}
           <View style={{ flex: 1, display: selectedCampaign ? 'none' : 'flex' }}>
             <View style={styles.screenContainer}>
@@ -312,6 +305,11 @@ export const AuthScreen: React.FC = () => {
                     setSelectedCampaign(null);
                     setActiveTab(tab);
                   }}
+                  onSelectCampaign={(campaign) => setSelectedCampaign(campaign)}
+                />
+              </View>
+              <View style={{ flex: 1, display: activeTab === 'instant' ? 'flex' : 'none' }}>
+                <InstantScreen
                   onSelectCampaign={(campaign) => setSelectedCampaign(campaign)}
                 />
               </View>
@@ -333,6 +331,7 @@ export const AuthScreen: React.FC = () => {
                   user={user}
                   onSignOut={handleSignOut}
                   onUpdateUser={(updated) => setUser(updated)}
+                  isActive={activeTab === 'profile'}
                 />
               </View>
             </View>
@@ -377,90 +376,94 @@ export const AuthScreen: React.FC = () => {
           )}
         </View>
       ) : (
-        <SafeAreaView style={styles.container}>
+        <View style={[styles.container, { paddingTop: topInset }]}>
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.signInCard}>
-              {/* Trust / Category Pill - Secret Preview Trigger */}
-              <TouchableOpacity
-                activeOpacity={1}
-                onPress={handleSkipLogin}
-                style={styles.trustBadge}
-              >
-                <Text style={styles.trustBadgeFlag}>🇮🇳</Text>
-                <Text style={styles.trustBadgeText}>#1 Trusted Earning Platform</Text>
-              </TouchableOpacity>
+            <View style={styles.authMainWrap}>
+              <View style={styles.signInCard}>
+                {/* Trust / Category Pill - Secret Preview Trigger */}
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={handleSkipLogin}
+                  style={styles.trustBadge}
+                >
+                  <Text style={styles.trustBadgeFlag}>🇮🇳</Text>
+                  <Text style={styles.trustBadgeText}>#1 Trusted Earning Platform</Text>
+                </TouchableOpacity>
 
-              {/* App Branding Logo */}
-              <AppLogo size={64} showSparkle style={{ marginBottom: 12 }} />
+                {/* App Branding Logo */}
+                <AppLogo size={64} showSparkle style={{ marginBottom: 12 }} />
 
-              <BrandLogo fontSize={32} style={{ marginBottom: 4 }} />
-              <Text style={styles.subtitle}>India's Largest Earning App</Text>
+                <BrandLogo fontSize={32} style={{ marginBottom: 4 }} />
+                <Text style={styles.subtitle}>India's Largest Earning App</Text>
 
-              {/* Trust Value Highlights Card */}
-              <View style={styles.featuresCard}>
-                <View style={styles.featureRow}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                    <Ionicons name="flash" size={16} color="#2563EB" />
+                {/* Trust Value Highlights Card */}
+                <View style={styles.featuresCard}>
+                  <View style={styles.featureRow}>
+                    <View style={[styles.featureIconWrap, { backgroundColor: '#EFF6FF' }]}>
+                      <Ionicons name="flash" size={16} color="#2563EB" />
+                    </View>
+                    <View style={styles.featureTextWrap}>
+                      <Text style={styles.featureHeading}>Instant UPI & Bank Payouts</Text>
+                      <Text style={styles.featureSub}>Direct withdrawal to your account</Text>
+                    </View>
                   </View>
-                  <View style={styles.featureTextWrap}>
-                    <Text style={styles.featureHeading}>Instant UPI & Bank Payouts</Text>
-                    <Text style={styles.featureSub}>Direct withdrawal to your account</Text>
+
+                  <View style={styles.featureDivider} />
+
+                  <View style={styles.featureRow}>
+                    <View style={[styles.featureIconWrap, { backgroundColor: '#ECFDF5' }]}>
+                      <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                    </View>
+                    <View style={styles.featureTextWrap}>
+                      <Text style={styles.featureHeading}>100% Verified Offers</Text>
+                      <Text style={styles.featureSub}>Safe, tested apps with guaranteed rewards</Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.featureDivider} />
+
+                  <View style={styles.featureRow}>
+                    <View style={[styles.featureIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                      <Ionicons name="gift" size={16} color="#D97706" />
+                    </View>
+                    <View style={styles.featureTextWrap}>
+                      <Text style={styles.featureHeading}>Up to ₹1000 payout offers per task</Text>
+                      <Text style={styles.featureSub}>Highest reward rates in India</Text>
+                    </View>
                   </View>
                 </View>
 
-                <View style={styles.featureDivider} />
-
-                <View style={styles.featureRow}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: '#ECFDF5' }]}>
-                    <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                {/* Error Display */}
+                {errorMessage ? (
+                  <View style={styles.errorBox}>
+                    <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
                   </View>
-                  <View style={styles.featureTextWrap}>
-                    <Text style={styles.featureHeading}>100% Verified Offers</Text>
-                    <Text style={styles.featureSub}>Safe, tested apps with guaranteed rewards</Text>
-                  </View>
-                </View>
+                ) : null}
 
-                <View style={styles.featureDivider} />
-
-                <View style={styles.featureRow}>
-                  <View style={[styles.featureIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                    <Ionicons name="gift" size={16} color="#D97706" />
-                  </View>
-                  <View style={styles.featureTextWrap}>
-                    <Text style={styles.featureHeading}>Up to ₹1000 payout offers per task</Text>
-                    <Text style={styles.featureSub}>Highest reward rates in India</Text>
+                {/* Action Card: Google Sign In */}
+                <View style={styles.actionCard}>
+                  <View style={styles.buttonWrapper}>
+                    <GoogleSignInButton
+                      onPress={handleGoogleSignIn}
+                      isLoading={isAuthenticating}
+                    />
                   </View>
                 </View>
               </View>
+            </View>
 
-              {/* Error Display */}
-              {errorMessage ? (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 6 }} />
-                  <Text style={styles.errorText}>{errorMessage}</Text>
-                </View>
-              ) : null}
-
-              {/* Action Card: Google Sign In */}
-              <View style={styles.actionCard}>
-                <View style={styles.buttonWrapper}>
-                  <GoogleSignInButton
-                    onPress={handleGoogleSignIn}
-                    isLoading={isAuthenticating}
-                  />
-                </View>
-              </View>
-
-              {/* Terms Footer */}
+            {/* Terms Footer - Positioned at the very bottom */}
+            <View style={styles.termsFooter}>
               <Text style={styles.termsText}>
                 By continuing, you agree to our Terms of Service & Privacy Policy
               </Text>
             </View>
           </ScrollView>
-        </SafeAreaView>
+        </View>
       )}
 
       {/* Branded Launch Splash Overlay (Smooth 60fps fade-out with zero flicker or layout shift) */}
@@ -469,7 +472,7 @@ export const AuthScreen: React.FC = () => {
           style={[
             StyleSheet.absoluteFill,
             styles.splashOverlay,
-            { opacity: splashAnim },
+            { opacity: splashAnim, paddingTop: topInset + 40 },
           ]}
           pointerEvents="none"
         >
@@ -504,21 +507,24 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'android'
-      ? Math.max(StatusBar.currentHeight || 0, 36) + 14
-      : Platform.OS === 'ios'
-      ? 14
-      : 10,
+    paddingTop: 0,
   },
   screenContainer: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  },
+  authMainWrap: {
+    flex: 1,
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
   splashOverlay: {
     backgroundColor: '#FFFFFF',
@@ -592,11 +598,11 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563EB',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#64748B',
     marginBottom: 16,
-    letterSpacing: -0.2,
+    letterSpacing: 0.2,
   },
   featuresCard: {
     width: '100%',
@@ -679,6 +685,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     flex: 1,
+  },
+  termsFooter: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: Platform.OS === 'ios' ? 12 : 16,
   },
   termsText: {
     fontSize: 11,
