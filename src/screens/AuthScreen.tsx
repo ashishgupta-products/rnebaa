@@ -107,7 +107,18 @@ export const AuthScreen: React.FC = () => {
           if (savedUser.email) {
             fetchLatestBackendUser(savedUser.email).then((fresh) => {
               if (isMounted && fresh) {
-                setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+                setUser((prev) => {
+                  if (!prev) return prev;
+                  const merged: UserProfile = {
+                    ...prev,
+                    backendUser: fresh,
+                    upiId: prev.upiId || fresh.upiId || fresh.phone,
+                    phoneNumber: prev.phoneNumber || fresh.phone,
+                    gender: prev.gender || fresh.gender,
+                  };
+                  saveUserSession(merged).catch(() => {});
+                  return merged;
+                });
               }
             });
             fetchUserSubmissions(savedUser.email).then((live) => {
@@ -172,7 +183,18 @@ export const AuthScreen: React.FC = () => {
     // Refresh live balance from PostgreSQL
     fetchLatestBackendUser(user.email).then((fresh) => {
       if (fresh) {
-        setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+        setUser((prev) => {
+          if (!prev) return prev;
+          const merged: UserProfile = {
+            ...prev,
+            backendUser: fresh,
+            upiId: prev.upiId || fresh.upiId || fresh.phone,
+            phoneNumber: prev.phoneNumber || fresh.phone,
+            gender: prev.gender || fresh.gender,
+          };
+          saveUserSession(merged).catch(() => {});
+          return merged;
+        });
       }
     });
 
@@ -324,6 +346,7 @@ export const AuthScreen: React.FC = () => {
                   onRefreshUser={(freshBackendUser) => {
                     setUser((prev) => (prev ? { ...prev, backendUser: freshBackendUser } : prev));
                   }}
+                  isActive={activeTab === 'history'}
                 />
               </View>
               <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none' }}>
@@ -343,7 +366,18 @@ export const AuthScreen: React.FC = () => {
                 if (user?.email) {
                   fetchLatestBackendUser(user.email).then((fresh) => {
                     if (fresh) {
-                      setUser((prev) => (prev ? { ...prev, backendUser: fresh } : prev));
+                      setUser((prev) => {
+                        if (!prev) return prev;
+                        const merged: UserProfile = {
+                          ...prev,
+                          backendUser: fresh,
+                          upiId: prev.upiId || fresh.upiId || fresh.phone,
+                          phoneNumber: prev.phoneNumber || fresh.phone,
+                          gender: prev.gender || fresh.gender,
+                        };
+                        saveUserSession(merged).catch(() => {});
+                        return merged;
+                      });
                     }
                   });
                 }
@@ -406,7 +440,7 @@ export const AuthScreen: React.FC = () => {
                       <Ionicons name="flash" size={16} color="#2563EB" />
                     </View>
                     <View style={styles.featureTextWrap}>
-                      <Text style={styles.featureHeading}>Instant UPI & Bank Payouts</Text>
+                      <Text style={styles.featureHeading}>Instant UPI Payouts</Text>
                       <Text style={styles.featureSub}>Direct withdrawal to your account</Text>
                     </View>
                   </View>

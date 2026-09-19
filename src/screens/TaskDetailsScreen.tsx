@@ -326,10 +326,10 @@ export const TaskDetailsScreen: React.FC<TaskDetailsScreenProps> = ({
           <View style={styles.directNoticeCard}>
             <View style={styles.directNoticeHeader}>
               <Ionicons name="checkmark-circle" size={18} color="#059669" />
-              <Text style={styles.directNoticeTitle}>Paid Directly by App</Text>
+              <Text style={styles.directNoticeTitle}>Paid Directly by {campaign.name || 'App'}</Text>
             </View>
             <Text style={styles.directNoticeText}>
-              This app credits your reward directly to your account. Copy the code above, complete your registration in the app, and get rewarded directly. No screenshot or proof submission needed on EarnByApps.
+              Your reward will be credited directly by {campaign.name || 'the app'} as they run a 2-way referral program. Whomever's code you're using they will get a reward for sharing their referral code and you will get a reward for using their referral code during signup.
             </Text>
           </View>
         )}
@@ -487,17 +487,6 @@ const styles = StyleSheet.create({
     paddingRight: 14,
   },
   logoWrapper: {
-    width: 62,
-    height: 62,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
     marginBottom: 14,
   },
   appName: {

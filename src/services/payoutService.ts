@@ -88,7 +88,7 @@ export async function requestPayout(
  */
 export async function fetchUserPayouts(
   userEmail?: string
-): Promise<PayoutItem[]> {
+): Promise<PayoutItem[] | null> {
   if (!userEmail) return [];
   try {
     const token = await getSavedBackendToken();
@@ -105,7 +105,8 @@ export async function fetchUserPayouts(
 
     if (!res.ok) {
       console.warn(`Payouts fetch failed with HTTP ${res.status}`);
-      return [];
+      // Return null so caller knows this was a server/network error and does NOT wipe local cache
+      return null;
     }
 
     const data = await res.json().catch(() => ({}));
@@ -139,6 +140,6 @@ export async function fetchUserPayouts(
     }));
   } catch (err) {
     console.error('Error fetching user payouts:', err);
-    return [];
+    return null;
   }
 }

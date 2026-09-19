@@ -6,6 +6,9 @@ export interface BackendUser {
   balance: number;
   picture?: string;
   originAppId?: string;
+  phone?: string;
+  upiId?: string;
+  gender?: string;
 }
 
 export interface UserProfile {

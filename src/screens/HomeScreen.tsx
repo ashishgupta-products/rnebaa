@@ -17,7 +17,6 @@ import { Campaign, TaskHistoryItem } from '../types/campaign';
 import { fetchLiveCampaigns, getCachedCampaigns } from '../services/campaignService';
 import { CampaignLogo } from '../components/CampaignLogo';
 import { TabType } from '../types/navigation';
-
 const COIN_STYLE_1 = require('../../assets/coin-style-1.png');
 
 // Teaser placeholder cards (3 coming soon teaser cards)
@@ -43,6 +42,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   const [campaigns, setCampaigns] = useState<Campaign[]>(() => getCachedCampaigns() || []);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(() => !getCachedCampaigns());
+  const [visibleCount, setVisibleCount] = useState<number>(3);
 
   // Filter out any campaigns that the user has already submitted proof for
   const submittedAppNames = new Set(
@@ -58,6 +58,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     return !isSubmittedByName && !isSubmittedById;
   });
 
+  const displayedCampaigns = availableCampaigns.slice(0, visibleCount);
+  const hasMore = visibleCount < availableCampaigns.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 3);
+  };
+
   const balance = user.backendUser?.balance || 0;
 
   const loadData = async (forceFresh = false) => {
@@ -71,11 +78,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   useEffect(() => {
-    loadData();
+    // Always fetch fresh on mount to ensure home is in sync with the database
+    loadData(true);
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setVisibleCount(3);
     const data = await fetchLiveCampaigns(true);
     setCampaigns(data);
     setRefreshing(false);
@@ -142,8 +151,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
 
         <View style={styles.campaignsList}>
-          {/* Real Live Campaigns List (On Top) */}
-          {availableCampaigns.map((item) => (
+          {/* Real Live Campaigns List (Limited to visibleCount, increments by 3 on Load More) */}
+          {displayedCampaigns.map((item) => (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.9}
@@ -167,8 +176,20 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </TouchableOpacity>
           ))}
 
-          {/* Dummy Cards (Below Real Cards) */}
-          {DUMMY_COMING_SOON_CARDS.map((dummy) => (
+          {/* Simple Load More Button */}
+          {hasMore && (
+            <TouchableOpacity
+              style={styles.loadMoreButton}
+              onPress={handleLoadMore}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreText}>Load More</Text>
+              <Ionicons name="chevron-down" size={16} color="#2563EB" style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+          )}
+
+          {/* Dummy Cards (Teasers for upcoming offers, shown once all live offers are loaded) */}
+          {!hasMore && DUMMY_COMING_SOON_CARDS.map((dummy) => (
             <View key={dummy.id} style={styles.dummyCard}>
               <View style={styles.cardHeader}>
                 <View style={styles.dummyIconBox}>
@@ -192,23 +213,15 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
             </View>
           )}
 
-          {/* Empty state if finished loading and no real campaigns are available */}
-          {!loading && availableCampaigns.length === 0 && (
+          {/* Empty state if all live genuine campaigns are submitted */}
+          {!loading && availableCampaigns.length === 0 && campaigns.length > 0 && (
             <View style={styles.emptyBoxInline}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons
-                  name={campaigns.length > 0 ? 'checkmark-done-circle' : 'folder-open-outline'}
-                  size={32}
-                  color={campaigns.length > 0 ? '#10B981' : '#94A3B8'}
-                />
+                <Ionicons name="checkmark-done-circle" size={32} color="#10B981" />
               </View>
-              <Text style={styles.emptyTitle}>
-                {campaigns.length > 0 ? 'All Caught Up!' : 'No Active Offers'}
-              </Text>
+              <Text style={styles.emptyTitle}>All Caught Up!</Text>
               <Text style={styles.emptySubtitle}>
-                {campaigns.length > 0
-                  ? 'You have submitted proof for all available offers. New tasks will show up here as soon as they are added!'
-                  : 'Check back soon for new offers.'}
+                You have submitted proof for all available offers. New tasks will show up here as soon as they are added!
               </Text>
               <TouchableOpacity style={styles.refreshButton} onPress={() => loadData(true)}>
                 <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
@@ -427,11 +440,7 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: -0.2,
   },
-  cardLogoImg: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-  },
+
   loadingBoxInline: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -487,5 +496,37 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    height: 48,
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
+    letterSpacing: 0.1,
   },
 });

@@ -81,9 +81,6 @@ export function getDemoUserProfile(): UserProfile {
     upiId: '',
     phoneNumber: '',
     gender: '',
-    bankAccountName: '',
-    bankAccountNumber: '',
-    bankIfscCode: '',
     backendSyncStatus: 'synced',
     backendUser: {
       id: 'demo-user-id',
@@ -101,20 +98,28 @@ export function getDemoUserProfile(): UserProfile {
  * Updates user profile details in persistent storage
  */
 export async function updateUserProfileDetails(
-  updates: Partial<UserProfile>
+  updates: Partial<UserProfile>,
+  fallbackUser?: UserProfile
 ): Promise<UserProfile | null> {
   try {
-    const current = await getUserSession();
+    const session = await getUserSession();
+    const current = session || fallbackUser;
     if (!current) return null;
+
     const updated: UserProfile = {
       ...current,
       ...updates,
-      // Also sync name/email into backendUser if present
+      upiId: updates.upiId !== undefined ? updates.upiId : current.upiId,
+      phoneNumber: updates.phoneNumber !== undefined ? updates.phoneNumber : current.phoneNumber,
+      gender: updates.gender !== undefined ? updates.gender : current.gender,
       backendUser: current.backendUser
         ? {
             ...current.backendUser,
             ...(updates.name ? { name: updates.name } : {}),
             ...(updates.email ? { email: updates.email } : {}),
+            ...(updates.upiId ? { upiId: updates.upiId } : {}),
+            ...(updates.phoneNumber ? { phone: updates.phoneNumber } : {}),
+            ...(updates.gender ? { gender: updates.gender } : {}),
           }
         : undefined,
     };
@@ -122,18 +127,22 @@ export async function updateUserProfileDetails(
 
     // Sync profile and payment details with the backend database
     try {
-      const token = await getSavedBackendToken();
+      const token = (await getSavedBackendToken()) || current.backendToken;
       const email = (updates.email || current.email || '').toLowerCase().trim();
-      if (token && email) {
-        const paymentDetails = updates.upiId || updates.bankAccountNumber || current.upiId || current.bankAccountNumber || 'N/A';
-        const paymentMethod = updates.upiId || current.upiId ? 'UPI' : 'Bank Transfer';
+      if (email) {
+        const paymentDetails = updates.upiId || current.upiId || 'N/A';
+        const paymentMethod = 'UPI';
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
         fetch(`${API_CONFIG.baseUrl}/api/users`, {
           method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
+          headers,
           body: JSON.stringify({
             email,
             fullName: updates.name || current.name,

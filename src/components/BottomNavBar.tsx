@@ -39,7 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'instant',
-    label: 'Instant',
+    label: 'Direct',
     activeIcon: 'flash',
     inactiveIcon: 'flash-outline',
   },

@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { UserProfile } from '../types/auth';
 import { updateUserProfileDetails } from '../services/authService';
+import { isValidIndianMobile, getIndianMobileLiveStatus } from '../utils/validation';
 
 interface ProfileScreenProps {
   user: UserProfile;
@@ -36,18 +37,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [isDirty, setIsDirty] = useState<boolean>(false);
 
   const resolveUpiNumber = (val?: string, fallbackPhone?: string) => {
-    if (val && /^\d{10}$/.test(val.trim())) return val.trim();
-    if (fallbackPhone) {
+    if (val && typeof val === 'string' && val.trim()) {
+      const trimmed = val.trim();
+      const digits = trimmed.replace(/\D/g, '');
+      if (digits.length >= 10) return digits.slice(-10);
+      return trimmed;
+    }
+    if (fallbackPhone && typeof fallbackPhone === 'string' && fallbackPhone.trim()) {
       const digits = fallbackPhone.replace(/\D/g, '');
       if (digits.length >= 10) return digits.slice(-10);
+      return fallbackPhone.trim();
     }
     return '';
   };
 
-  const resolveGender = (rawGender?: string, userId?: string) => {
-    if (!rawGender) return '';
-    if (userId === 'demo-user-id' && rawGender.toLowerCase() === 'male') return '';
-    return rawGender;
+  const resolveGender = (rawGender?: string, fallbackGender?: string) => {
+    const val = rawGender || fallbackGender;
+    if (!val || typeof val !== 'string') return '';
+    const clean = val.trim().toLowerCase();
+    if (clean === 'n/a' || clean === 'null' || clean === 'undefined') return '';
+    return clean;
   };
 
   // Form states
@@ -55,13 +64,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [email, setEmail] = useState<string>(user.email || '');
   const [upiId, setUpiId] = useState<string>(resolveUpiNumber(user.upiId, user.phoneNumber));
   const [phone, setPhone] = useState<string>(user.phoneNumber || '');
-  const [gender, setGender] = useState<string>(resolveGender(user.gender, user.id));
-  const [bankName, setBankName] = useState<string>(user.bankAccountName || '');
-  const [bankAccountNumber, setBankAccountNumber] = useState<string>(user.bankAccountNumber || '');
-  const [bankIfsc, setBankIfsc] = useState<string>(user.bankIfscCode || '');
+  const [gender, setGender] = useState<string>(resolveGender(user.gender, user.backendUser?.gender));
 
   // Dropdown states
   const [isGenderOpen, setIsGenderOpen] = useState<boolean>(false);
+
+  const liveUpiStatus = getIndianMobileLiveStatus(upiId);
 
   // Sync state if user prop changes
   useEffect(() => {
@@ -69,10 +77,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setEmail(user.email || '');
     setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
     setPhone(user.phoneNumber || '');
-    setGender(resolveGender(user.gender, user.id));
-    setBankName(user.bankAccountName || '');
-    setBankAccountNumber(user.bankAccountNumber || '');
-    setBankIfsc(user.bankIfscCode || '');
+    setGender(resolveGender(user.gender, user.backendUser?.gender));
     setIsGenderOpen(false);
     setIsDirty(false);
   }, [user]);
@@ -87,10 +92,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setEmail(user.email || '');
     setUpiId(resolveUpiNumber(user.upiId, user.phoneNumber));
     setPhone(user.phoneNumber || '');
-    setGender(resolveGender(user.gender, user.id));
-    setBankName(user.bankAccountName || '');
-    setBankAccountNumber(user.bankAccountNumber || '');
-    setBankIfsc(user.bankIfscCode || '');
+    setGender(resolveGender(user.gender, user.backendUser?.gender));
     setIsGenderOpen(false);
     setIsDirty(false);
     setIsEditing(false);
@@ -122,26 +124,50 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return;
     }
     const cleanUpiNumber = upiId.replace(/\D/g, '');
-    if (!cleanUpiNumber || cleanUpiNumber.length !== 10) {
-      Alert.alert('Validation Error', 'Please enter a valid 10-digit UPI linked phone number not upi id');
+    if (!cleanUpiNumber || cleanUpiNumber.length < 10) {
+      Alert.alert('Validation Error', 'Please enter a 10-digit mobile number.');
+      return;
+    }
+    const finalUpiNumber = cleanUpiNumber.slice(-10);
+    if (!isValidIndianMobile(finalUpiNumber)) {
+      Alert.alert(
+        'Invalid Mobile Number',
+        'Indian mobile numbers must start with 6, 7, 8, or 9 (digits 0 to 5 are not used for mobile numbers).'
+      );
       return;
     }
 
+    const savedGender = gender ? gender.trim().toLowerCase() : '';
     setSaving(true);
     try {
-      const updated = await updateUserProfileDetails({
+      const updated = await updateUserProfileDetails(
+        {
+          name: fullName.trim(),
+          email: email.trim(),
+          upiId: finalUpiNumber,
+          phoneNumber: finalUpiNumber,
+          gender: savedGender,
+        },
+        user
+      );
+
+      // Immediately keep local states in sync
+      setUpiId(finalUpiNumber);
+      setPhone(finalUpiNumber);
+      setFullName(fullName.trim());
+      setGender(savedGender);
+
+      const finalProfile: UserProfile = updated || {
+        ...user,
         name: fullName.trim(),
         email: email.trim(),
-        upiId: cleanUpiNumber,
-        phoneNumber: cleanUpiNumber,
-        gender: gender.trim(),
-        bankAccountName: bankName.trim(),
-        bankAccountNumber: bankAccountNumber.trim(),
-        bankIfscCode: bankIfsc.trim().toUpperCase(),
-      });
+        upiId: finalUpiNumber,
+        phoneNumber: finalUpiNumber,
+        gender: savedGender,
+      };
 
-      if (updated && onUpdateUser) {
-        onUpdateUser(updated);
+      if (onUpdateUser) {
+        onUpdateUser(finalProfile);
       }
       setIsDirty(false);
       setIsEditing(false);
@@ -257,86 +283,35 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <TextInput
                   value={upiId}
                   onChangeText={(text) => {
-                    const cleaned = text.replace(/[^0-9]/g, '').slice(0, 10);
+                    let cleaned = text.replace(/[^0-9]/g, '');
+                    if (cleaned.length > 10) {
+                      cleaned = cleaned.slice(-10);
+                    }
                     setUpiId(cleaned);
                     markDirty();
                   }}
-                  placeholder="Enter 10-digit UPI linked phone number not upi id"
+                  placeholder="Enter 10-digit UPI linked phone number"
                   placeholderTextColor="#94A3B8"
                   keyboardType="number-pad"
                   maxLength={10}
                   underlineColorAndroid="transparent"
                   selectionColor="#4361EE"
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    liveUpiStatus.isError && styles.inputErrorBorder,
+                  ]}
                 />
-                <Text style={styles.fieldHelperText}>
-                  Please enter a valid 10-digit UPI linked phone number not upi id
+                <Text
+                  style={[
+                    styles.fieldHelperText,
+                    liveUpiStatus.isError && styles.fieldHelperErrorText,
+                    liveUpiStatus.isValid && styles.fieldHelperSuccessText,
+                  ]}
+                >
+                  {liveUpiStatus.message}
                 </Text>
               </View>
 
-              {/* Bank Account Name Field */}
-              <View style={styles.formField}>
-                <View style={styles.fieldLabelRow}>
-                  <Ionicons name="business-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
-                  <Text style={styles.fieldLabel}>Bank Account Name</Text>
-                </View>
-                <TextInput
-                  value={bankName}
-                  onChangeText={(text) => {
-                    setBankName(text);
-                    markDirty();
-                  }}
-                  placeholder="Enter your bank account name (optional)"
-                  placeholderTextColor="#94A3B8"
-                  underlineColorAndroid="transparent"
-                  selectionColor="#4361EE"
-                  style={styles.input}
-                />
-              </View>
-
-              {/* Bank Account Number Field */}
-              <View style={styles.formField}>
-                <View style={styles.fieldLabelRow}>
-                  <View style={styles.hashIconBox}>
-                    <Text style={styles.hashIconText}>#</Text>
-                  </View>
-                  <Text style={styles.fieldLabel}>Bank Account Number</Text>
-                </View>
-                <TextInput
-                  value={bankAccountNumber}
-                  onChangeText={(text) => {
-                    setBankAccountNumber(text);
-                    markDirty();
-                  }}
-                  placeholder="Enter your bank account number (optional)"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="number-pad"
-                  underlineColorAndroid="transparent"
-                  selectionColor="#4361EE"
-                  style={styles.input}
-                />
-              </View>
-
-              {/* Bank IFSC Code Field */}
-              <View style={styles.formField}>
-                <View style={styles.fieldLabelRow}>
-                  <Ionicons name="qr-code-outline" size={17} color="#4361EE" style={styles.fieldIcon} />
-                  <Text style={styles.fieldLabel}>Bank IFSC Code</Text>
-                </View>
-                <TextInput
-                  value={bankIfsc}
-                  onChangeText={(text) => {
-                    setBankIfsc(text.toUpperCase());
-                    markDirty();
-                  }}
-                  placeholder="Enter your bank IFSC code (optional)"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="characters"
-                  underlineColorAndroid="transparent"
-                  selectionColor="#4361EE"
-                  style={styles.input}
-                />
-              </View>
 
               {/* Gender Field */}
               <View style={styles.formField}>
@@ -363,7 +338,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 {isGenderOpen && (
                   <View style={styles.dropdownMenu}>
                     {['Male', 'Female', 'Other'].map((item, index) => {
-                      const isSelected = gender.toLowerCase() === item.toLowerCase();
+                      const isSelected = (gender || '').toLowerCase() === item.toLowerCase();
                       const isLast = index === 2;
                       return (
                         <TouchableOpacity
@@ -473,48 +448,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>UPI Linked Phone Number to receive Payment</Text>
-                <Text style={styles.infoValue}>{upiId || '10-digit UPI Phone Number not set'}</Text>
-              </View>
-            </View>
-
-            {/* 5. Bank Account Name Card */}
-            <View style={styles.infoCard}>
-              <View style={styles.iconBox}>
-                <Ionicons name="business-outline" size={18} color="#4361EE" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Bank Account Name</Text>
-                <Text style={[styles.infoValue, !bankName && styles.unsetPlaceholder]}>
-                  {bankName || 'Bank Account Name not set'}
+                <Text style={[styles.infoValue, !upiId && styles.unsetPlaceholder]}>
+                  {upiId || '10-digit UPI Phone Number not set'}
                 </Text>
               </View>
             </View>
 
-            {/* Bank Account Number Card */}
-            <View style={styles.infoCard}>
-              <View style={styles.iconBox}>
-                <Text style={styles.hashCardIcon}>#</Text>
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Bank Account Number</Text>
-                <Text style={[styles.infoValue, !bankAccountNumber && styles.unsetPlaceholder]}>
-                  {bankAccountNumber || 'Bank Account Number not set'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Bank IFSC Code Card */}
-            <View style={styles.infoCard}>
-              <View style={styles.iconBox}>
-                <Ionicons name="qr-code-outline" size={18} color="#4361EE" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>Bank IFSC Code</Text>
-                <Text style={[styles.infoValue, !bankIfsc && styles.unsetPlaceholder]}>
-                  {bankIfsc || 'Bank IFSC Code not set'}
-                </Text>
-              </View>
-            </View>
 
             {/* 6. Gender Card */}
             <View style={styles.infoCard}>
@@ -545,7 +484,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               onPress={onSignOut}
               activeOpacity={0.85}
             >
-              <Ionicons name="log-out-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Ionicons name="log-out-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
               <Text style={styles.signOutButtonText}>Logout</Text>
             </TouchableOpacity>
           </View>
@@ -754,11 +693,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 14,
   },
-  hashCardIcon: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#4361EE',
-  },
+
   infoContent: {
     flex: 1,
   },
@@ -810,28 +745,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FECACA',
     height: 52,
     marginTop: 4,
     marginBottom: 24,
     ...Platform.select({
       ios: {
         shadowColor: '#DC2626',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.22,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 3,
+        elevation: 1,
       },
       web: {
-        boxShadow: '0 4px 12px rgba(220, 38, 38, 0.25)',
+        boxShadow: '0 2px 8px rgba(220, 38, 38, 0.08)',
       },
     }),
   },
   signOutButtonText: {
-    color: '#FFFFFF',
+    color: '#DC2626',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.2,
@@ -876,16 +813,7 @@ const styles = StyleSheet.create({
   fieldIcon: {
     marginRight: 6,
   },
-  hashIconBox: {
-    width: 17,
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  hashIconText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#4361EE',
-  },
+
   fieldLabel: {
     fontSize: 13,
     fontWeight: '700',
@@ -902,6 +830,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginLeft: 4,
     lineHeight: 16,
+  },
+  fieldHelperErrorText: {
+    color: '#EF4444',
+    fontWeight: '600',
+  },
+  fieldHelperSuccessText: {
+    color: '#10B981',
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#F8FAFC',
@@ -924,6 +860,11 @@ const styles = StyleSheet.create({
     color: '#64748B',
     borderWidth: 0,
     borderColor: 'transparent',
+  },
+  inputErrorBorder: {
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
   },
   dropdownButton: {
     flexDirection: 'row',

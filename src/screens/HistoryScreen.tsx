@@ -23,6 +23,7 @@ import { fetchLatestBackendUser } from '../services/backendAuthService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BrandLogo } from '../components/BrandLogo';
 import { CampaignLogo } from '../components/CampaignLogo';
+import { isValidIndianMobile } from '../utils/validation';
 
 const COIN_STYLE_1 = require('../../assets/coin-style-1.png');
 
@@ -31,6 +32,7 @@ interface HistoryScreenProps {
   onNavigateToHome: () => void;
   submissions?: TaskHistoryItem[];
   onRefreshUser?: (updated: BackendUser) => void;
+  isActive?: boolean;
 }
 
 interface WithdrawalRequest {
@@ -61,18 +63,21 @@ const getWithdrawalsStorageKey = (email?: string) => {
   return clean ? `@earnbyapps_withdrawal_requests_${clean}` : '@earnbyapps_withdrawal_requests';
 };
 
-// No hardcoded default submissions or withdrawals - loaded cleanly per user account
-const DEFAULT_USER_SUBMISSIONS: TaskHistoryItem[] = [];
-const DEFAULT_WITHDRAWALS: WithdrawalRequest[] = [];
+// In-memory cache for withdrawal requests so they are instantly visible on tab switch
+const inMemoryWithdrawalsCache = new Map<string, WithdrawalRequest[]>();
 
 export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   user,
   onNavigateToHome,
   submissions = [],
   onRefreshUser,
+  isActive = true,
 }) => {
   const [filter, setFilter] = useState<'all' | 'added_to_wallet' | 'pending' | 'rejected'>('all');
-  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>(() => {
+    const emailKey = (user.email || '').toLowerCase().trim();
+    return inMemoryWithdrawalsCache.get(emailKey) || [];
+  });
   const [historyItems, setHistoryItems] = useState<TaskHistoryItem[]>(() => {
     return (submissions || []).filter((s) => !s.id?.startsWith('h-'));
   });
@@ -113,26 +118,32 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   // Load stored withdrawals from local cache and sync with live database
   const loadWithdrawalRequests = async () => {
     try {
+      const emailKey = (user.email || '').toLowerCase().trim();
       const storageKey = getWithdrawalsStorageKey(user.email);
-      let currentList: WithdrawalRequest[] = [];
+      let cachedList: WithdrawalRequest[] = inMemoryWithdrawalsCache.get(emailKey) || [];
       const stored = await AsyncStorage.getItem(storageKey);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            currentList = parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            cachedList = parsed;
+            if (emailKey) inMemoryWithdrawalsCache.set(emailKey, parsed);
             setWithdrawalRequests(parsed);
           }
         } catch {}
-      } else {
-        setWithdrawalRequests([]);
       }
 
       if (user.email) {
         const remote = await fetchUserPayouts(user.email);
-        if (Array.isArray(remote)) {
-          setWithdrawalRequests(remote);
-          await AsyncStorage.setItem(storageKey, JSON.stringify(remote));
+        // Only update if remote fetch succeeded (non-null array)
+        if (remote !== null && Array.isArray(remote)) {
+          // Merge remote with any locally saved pending requests
+          const remoteIds = new Set(remote.map((r) => r.id));
+          const localOnly = cachedList.filter((c) => !remoteIds.has(c.id));
+          const merged = [...localOnly, ...remote];
+          if (emailKey) inMemoryWithdrawalsCache.set(emailKey, merged);
+          setWithdrawalRequests(merged);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(merged));
         }
       }
     } catch (e) {
@@ -177,10 +188,15 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   };
 
   useEffect(() => {
-    loadWithdrawalRequests();
-    loadSubmissions();
-    loadCampaigns();
-  }, [user.email]);
+    if (isActive) {
+      loadWithdrawalRequests();
+      loadSubmissions();
+      loadCampaigns();
+      if (user.email && onRefreshUser) {
+        fetchLatestBackendUser(user.email).then((u) => u && onRefreshUser(u));
+      }
+    }
+  }, [isActive, user.email]);
 
   useEffect(() => {
     if (submissions && submissions.length > 0) {
@@ -256,14 +272,22 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       return;
     }
 
-    const payoutDest = user.upiId || user.bankAccountNumber || 'UPI ID';
+    const payoutDest = (user.upiId || user.phoneNumber || '').replace(/\D/g, '').slice(-10);
+    if (!payoutDest || !isValidIndianMobile(payoutDest)) {
+      Alert.alert(
+        'UPI Phone Number Required',
+        'Please go to your Profile and update your 10-digit UPI linked phone number (must start with 6, 7, 8, or 9) before requesting a withdrawal.'
+      );
+      return;
+    }
+
     setSubmittingWithdrawal(true);
     try {
       const payoutRes = await requestPayout({
         amount: amt,
-        method: user.upiId ? 'UPI' : 'Bank Transfer',
+        method: 'UPI',
         account: payoutDest,
-        upiId: user.upiId,
+        upiId: payoutDest,
         email: user.email,
       });
 
@@ -274,7 +298,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       const newReq: WithdrawalRequest = payoutRes.payout || {
         id: `WD-${Date.now().toString().slice(-6)}`,
         amount: amt,
-        method: user.upiId ? 'UPI' : 'Bank Transfer',
+        method: 'UPI',
         account: payoutDest,
         status: 'Pending',
         date: new Date().toISOString().replace('T', ' at ').slice(0, 19),
@@ -282,6 +306,8 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
       const storageKey = getWithdrawalsStorageKey(user.email);
       const updated = [newReq, ...withdrawalRequests.filter((w) => w.id !== newReq.id)];
+      const emailKey = (user.email || '').toLowerCase().trim();
+      if (emailKey) inMemoryWithdrawalsCache.set(emailKey, updated);
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
       setWithdrawalRequests(updated);
       setShowWithdrawModal(false);
@@ -400,7 +426,10 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
             <Text style={styles.cardHeaderLabel}>TOTAL WALLET AMOUNT</Text>
             <TouchableOpacity
               style={styles.withdrawHistoryPill}
-              onPress={() => setShowWithdrawHistoryModal(true)}
+              onPress={() => {
+                loadWithdrawalRequests();
+                setShowWithdrawHistoryModal(true);
+              }}
               activeOpacity={0.8}
             >
               <Text style={styles.withdrawHistoryText}>Withdraw History</Text>
@@ -684,6 +713,31 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
             ) : (
               <Text style={styles.modalHelper}>Minimum withdrawal amount is ₹ 20</Text>
             )}
+
+            {/* Payout Destination Info */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#F8FAFC',
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              marginTop: 12,
+              marginBottom: 4,
+              borderWidth: 1,
+              borderColor: '#E2E8F0',
+              gap: 8,
+            }}>
+              <Ionicons name="wallet-outline" size={18} color="#2563EB" />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>
+                  Payout Destination (UPI Phone)
+                </Text>
+                <Text style={{ fontSize: 13, color: '#0F172A', fontWeight: '700', marginTop: 1 }}>
+                  {user.upiId || user.phoneNumber || 'Not configured in Profile'}
+                </Text>
+              </View>
+            </View>
 
             <TouchableOpacity
               style={[

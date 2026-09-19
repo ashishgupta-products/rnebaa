@@ -9,7 +9,13 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { Ionicons } from '@expo/vector-icons';
 import { Campaign } from '../types/campaign';
 import {
@@ -36,6 +42,20 @@ export const InstantScreen: React.FC<InstantScreenProps> = ({
   const [apps, setApps] = useState<IndependentApp[]>(() => getCachedIndependentApps() || []);
   const [loading, setLoading] = useState<boolean>(() => !getCachedIndependentApps());
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [visibleCount, setVisibleCount] = useState<number>(3);
+  const [isExplainerOpen, setIsExplainerOpen] = useState<boolean>(false);
+
+  const displayedApps = apps.slice(0, visibleCount);
+  const hasMore = visibleCount < apps.length;
+
+  const handleLoadMore = () => {
+    setVisibleCount((prev) => prev + 3);
+  };
+
+  const toggleExplainer = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExplainerOpen((prev) => !prev);
+  };
 
   // Fetch direct payout apps from /api/independent (as created in admin and shown on /instantpayout)
   const loadApps = async (forceFresh = false) => {
@@ -58,6 +78,7 @@ export const InstantScreen: React.FC<InstantScreenProps> = ({
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setVisibleCount(3);
     await loadApps(true);
     setRefreshing(false);
   };
@@ -132,48 +153,10 @@ export const InstantScreen: React.FC<InstantScreenProps> = ({
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Feature Notice Banner - Statement requested by user */}
-        <View style={styles.bannerContainer}>
-          <View style={styles.bannerHeaderRow}>
-            <View style={styles.flashIconCircle}>
-              <Ionicons name="flash" size={18} color="#2563EB" />
-            </View>
-            <View style={styles.instantBadge}>
-              <Ionicons name="sparkles" size={11} color="#2563EB" style={{ marginRight: 3 }} />
-              <Text style={styles.instantBadgeText}>Instant Payouts</Text>
-            </View>
-          </View>
-
-          {/* User Requested Statement */}
-          <View style={styles.bannerNoticeBox}>
-            <Text style={styles.bannerNoticeText}>
-              Instant page contains apps that pay directly to their new users , direct reward zero waiting signup with these codes and the apps will send your rewards directly to you
-            </Text>
-          </View>
-
-          {/* Key Advantages Pills */}
-          <View style={styles.perksRow}>
-            <View style={styles.perkItem}>
-              <Ionicons name="checkmark-circle" size={14} color="#059669" />
-              <Text style={styles.perkText}>Direct App Payout</Text>
-            </View>
-            <View style={styles.perkDivider} />
-            <View style={styles.perkItem}>
-              <Ionicons name="timer-outline" size={14} color="#2563EB" />
-              <Text style={styles.perkText}>Zero Waiting</Text>
-            </View>
-            <View style={styles.perkDivider} />
-            <View style={styles.perkItem}>
-              <Ionicons name="key-outline" size={14} color="#D97706" />
-              <Text style={styles.perkText}>Signup Codes</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Dynamic Cards List (Cards like Home, clicking opens offer details) */}
         <View style={styles.campaignsList}>
-          {/* Live Independent Apps (Cards like Home) */}
-          {apps.map((item) => (
+          {/* Live Independent Apps (Cards like Home, limited to visibleCount) */}
+          {displayedApps.map((item) => (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.9}
@@ -192,13 +175,132 @@ export const InstantScreen: React.FC<InstantScreenProps> = ({
                   <Text style={styles.cardTitle}>{item.appName}</Text>
                   <View style={styles.paidDirectlyRow}>
                     <Ionicons name="checkmark-circle" size={14} color="#059669" style={{ marginRight: 4 }} />
-                    <Text style={styles.paidDirectlyText}>Paid directly by app</Text>
+                    <Text style={styles.paidDirectlyText} numberOfLines={1}>
+                      Paid directly by {item.appName}
+                    </Text>
                   </View>
                 </View>
                 {renderRewardBadge(item)}
               </View>
             </TouchableOpacity>
           ))}
+
+          {/* Simple Load More Button */}
+          {hasMore && (
+            <TouchableOpacity
+              style={styles.loadMoreButton}
+              onPress={handleLoadMore}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreText}>Load More</Text>
+              <Ionicons name="chevron-down" size={16} color="#2563EB" style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+          )}
+
+          {/* What is a 2-Way Referral Dropdown Card */}
+          <View style={styles.explainerCard}>
+            <TouchableOpacity
+              style={styles.explainerHeaderToggle}
+              onPress={toggleExplainer}
+              activeOpacity={0.75}
+            >
+              <View style={styles.explainerIconWrap}>
+                <Ionicons name="repeat" size={20} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={styles.explainerTitle}>What is a 2-Way Referral?</Text>
+                  <View style={styles.winWinBadge}>
+                    <Text style={styles.winWinBadgeText}>WIN-WIN</Text>
+                  </View>
+                </View>
+                <Text style={styles.explainerSubtitle}>
+                  {isExplainerOpen ? 'Tap to collapse' : 'Both you & inviter earn • Tap to learn more'}
+                </Text>
+              </View>
+              <View style={[styles.chevronCircle, isExplainerOpen && styles.chevronCircleActive]}>
+                <Ionicons
+                  name={isExplainerOpen ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color={isExplainerOpen ? '#2563EB' : '#64748B'}
+                />
+              </View>
+            </TouchableOpacity>
+
+            {isExplainerOpen && (
+              <View style={styles.explainerBody}>
+                <View style={styles.explainerDivider} />
+
+                <Text style={styles.explainerDesc}>
+                  In a standard referral program, only the person sharing the code receives money. With a <Text style={styles.boldText}>2-Way Referral</Text>, the partner app rewards <Text style={styles.highlightText}>BOTH sides</Text>!
+                </Text>
+
+                {/* Visual Mutual Reward Diagram */}
+                <View style={styles.comparisonBox}>
+                  <View style={styles.partyBox}>
+                    <View style={styles.partyIconWrapYou}>
+                      <Ionicons name="person" size={18} color="#059669" />
+                    </View>
+                    <Text style={styles.partyRole}>You (New User)</Text>
+                    <Text style={styles.partyReward}>Earns Welcome Bonus</Text>
+                  </View>
+
+                  <View style={styles.mutualArrows}>
+                    <Ionicons name="swap-horizontal" size={22} color="#4F46E5" />
+                    <Text style={styles.mutualText}>Dual Reward</Text>
+                  </View>
+
+                  <View style={styles.partyBox}>
+                    <View style={styles.partyIconWrapInviter}>
+                      <Ionicons name="people" size={18} color="#2563EB" />
+                    </View>
+                    <Text style={styles.partyRole}>Inviter</Text>
+                    <Text style={styles.partyReward}>Earns Referral Reward</Text>
+                  </View>
+                </View>
+
+                {/* 3 Step Process */}
+                <View style={styles.stepsContainer}>
+                  <View style={styles.stepItem}>
+                    <View style={styles.stepNumberBadge}>
+                      <Text style={styles.stepNumberText}>1</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>Tap Any App & Copy Code</Text>
+                      <Text style={styles.stepSubtitle}>
+                        Open the offer card above and tap to copy the verified referral code.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepItem}>
+                    <View style={styles.stepNumberBadge}>
+                      <Text style={styles.stepNumberText}>2</Text>
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={styles.stepTitle}>Enter Code During Signup</Text>
+                      <Text style={styles.stepSubtitle}>
+                        Paste the code when registering your new account in that app.
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.stepItem}>
+                    <View style={[styles.stepNumberBadge, { backgroundColor: '#10B981' }]}>
+                      <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                    </View>
+                    <View style={styles.stepContent}>
+                      <Text style={[styles.stepTitle, { color: '#059669' }]}>Get Paid Directly</Text>
+                      <Text style={styles.stepSubtitle}>
+                        Complete the first activity (e.g. KYC, first UPI or trade) and the app sends your cash/reward directly into your bank or wallet.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+              </View>
+            )}
+          </View>
 
           {/* Inline Loading while fetching real apps */}
           {loading && apps.length === 0 && (
@@ -281,101 +383,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  /* Feature Notice Banner */
-  bannerContainer: {
-    marginHorizontal: 16,
-    marginTop: 6,
-    marginBottom: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 2,
-      },
-      web: {
-        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.04)',
-      },
-    }),
-  },
-  bannerHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  flashIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#EFF6FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  instantBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  instantBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#2563EB',
-  },
-  bannerNoticeBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#2563EB',
-    marginBottom: 12,
-  },
-  bannerNoticeText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#1E3A8A',
-    lineHeight: 18,
-  },
-  perksRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingTop: 4,
-  },
-  perkItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  perkText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  perkDivider: {
-    width: 1,
-    height: 14,
-    backgroundColor: '#CBD5E1',
-  },
-
   /* Cards List (1:1 with HomeScreen) */
   campaignsList: {
     paddingHorizontal: 16,
+    paddingTop: 8,
     gap: 12,
   },
   campaignCard: {
@@ -430,7 +441,6 @@ const styles = StyleSheet.create({
     color: '#059669',
     letterSpacing: 0.1,
   },
-
   /* Layered 3D Gold Coin (Matching HomeScreen) */
   coinWrapper: {
     width: 68,
@@ -532,5 +542,230 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  /* 2-Way Referral Explainer Card */
+  explainerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    marginTop: 6,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#4338CA',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: '0 4px 14px rgba(67, 56, 202, 0.05)',
+      },
+    }),
+  },
+  explainerHeaderToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  chevronCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chevronCircleActive: {
+    backgroundColor: '#EFF6FF',
+  },
+  explainerBody: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  explainerDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginBottom: 14,
+  },
+  explainerIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explainerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  explainerSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  winWinBadge: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  winWinBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.5,
+  },
+  explainerDesc: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 19,
+    marginBottom: 14,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  highlightText: {
+    fontWeight: '700',
+    color: '#2563EB',
+  },
+  comparisonBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#EEF2F6',
+  },
+  partyBox: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  partyIconWrapYou: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  partyIconWrapInviter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  partyRole: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  partyReward: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  mutualArrows: {
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  mutualText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#4F46E5',
+    marginTop: 2,
+    textTransform: 'uppercase',
+  },
+  stepsContainer: {
+    gap: 12,
+    marginBottom: 14,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  stepNumberBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepNumberText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 2,
+  },
+  stepSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    height: 48,
+    marginTop: 4,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+      },
+    }),
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2563EB',
+    letterSpacing: 0.1,
   },
 });

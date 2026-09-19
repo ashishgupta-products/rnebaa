@@ -148,6 +148,14 @@ export async function fetchLatestBackendUser(userEmail: string): Promise<Backend
         role: data.role || 'user',
         balance: Number(data.balance || 0),
         originAppId: 'mobile',
+        phone: data.phone && data.phone !== 'N/A' ? String(data.phone) : undefined,
+        upiId:
+          data.paymentDetails && data.paymentDetails !== 'N/A'
+            ? String(data.paymentDetails)
+            : data.upi && data.upi !== 'N/A'
+            ? String(data.upi)
+            : undefined,
+        gender: data.gender && data.gender !== 'N/A' ? String(data.gender) : undefined,
       };
 
       await AsyncStorage.setItem(STORAGE_KEYS.BACKEND_USER, JSON.stringify(backendUser));
