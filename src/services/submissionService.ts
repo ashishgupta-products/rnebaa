@@ -1,58 +1,104 @@
 import { Platform } from 'react-native';
 import { API_CONFIG } from '../config/authConfig';
 import { TaskHistoryItem } from '../types/campaign';
-import { getSavedBackendToken } from './backendAuthService';
+import { getSavedBackendToken, invalidateUserCache } from './backendAuthService';
+
+// In-memory cache for user submissions to eliminate unnecessary database hits
+const cachedSubmissionsMap = new Map<string, TaskHistoryItem[]>();
+const lastSubmissionsFetchMap = new Map<string, number>();
+const pendingSubmissionsPromiseMap = new Map<string, Promise<TaskHistoryItem[]>>();
+const SUBMISSIONS_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL
+
+export function invalidateSubmissionsCache(userEmail?: string): void {
+  if (userEmail) {
+    const key = userEmail.toLowerCase().trim();
+    cachedSubmissionsMap.delete(key);
+    lastSubmissionsFetchMap.delete(key);
+  } else {
+    cachedSubmissionsMap.clear();
+    lastSubmissionsFetchMap.clear();
+  }
+}
 
 /**
  * Service to interact with the live production submissions and upload APIs (earnbyapps.com).
  * Pulls and stores genuine user submissions from Neon PostgreSQL and saves screenshots to Cloudinary.
+ * If forceFresh is false and cached within 3 minutes, returns from memory without hitting Neon.
  */
-export async function fetchUserSubmissions(userEmail?: string): Promise<TaskHistoryItem[]> {
+export async function fetchUserSubmissions(
+  userEmail?: string,
+  forceFresh = false
+): Promise<TaskHistoryItem[]> {
   if (!userEmail) return [];
-  try {
-    const token = await getSavedBackendToken();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+  const key = userEmail.toLowerCase().trim();
+  const now = Date.now();
 
-    const url = `${API_CONFIG.baseUrl}/api/submissions?userEmail=${encodeURIComponent(userEmail.trim())}`;
-    const res = await fetch(url, { headers });
-
-    if (!res.ok) {
-      console.warn(`Submissions fetch failed: HTTP ${res.status}`);
-      return [];
-    }
-
-    const data: any[] = await res.json();
-    if (!Array.isArray(data)) return [];
-
-    // Filter by user email if provided
-    const userFiltered = userEmail
-      ? data.filter(
-          (item) =>
-            item.userEmail &&
-            item.userEmail.trim().toLowerCase() === userEmail.trim().toLowerCase()
-        )
-      : data;
-
-    return userFiltered.map((item) => ({
-      id: String(item.id || `sub-${Date.now()}`),
-      appName: String(item.appName || 'Task'),
-      reward: Number(item.reward || 0),
-      status: (['Paid', 'Pending', 'Rejected'].includes(item.status)
-        ? item.status
-        : 'Pending') as 'Paid' | 'Pending' | 'Rejected',
-      date: String(item.time || 'Recently'),
-      proofType: String(item.proofType || 'Verification Proof'),
-      proofUrl: item.proofUrl ? String(item.proofUrl) : undefined,
-      appId: item.appId ? String(item.appId) : undefined,
-      appLogoUrl: item.appLogoUrl || item.logoUrl || undefined,
-    }));
-  } catch (err) {
-    console.error('Error fetching live submissions:', err);
-    return [];
+  const cached = cachedSubmissionsMap.get(key);
+  const lastFetched = lastSubmissionsFetchMap.get(key) || 0;
+  if (!forceFresh && cached && now - lastFetched < SUBMISSIONS_CACHE_TTL_MS) {
+    return cached;
   }
+
+  const existingPromise = pendingSubmissionsPromiseMap.get(key);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = (async () => {
+    try {
+      const token = await getSavedBackendToken();
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const url = `${API_CONFIG.baseUrl}/api/submissions?userEmail=${encodeURIComponent(userEmail.trim())}`;
+      const res = await fetch(url, { headers });
+
+      if (!res.ok) {
+        console.warn(`Submissions fetch failed: HTTP ${res.status}`);
+        return cached || [];
+      }
+
+      const data: any[] = await res.json();
+      if (!Array.isArray(data)) return cached || [];
+
+      // Filter by user email if provided
+      const userFiltered = userEmail
+        ? data.filter(
+            (item) =>
+              item.userEmail &&
+              item.userEmail.trim().toLowerCase() === userEmail.trim().toLowerCase()
+          )
+        : data;
+
+      const results = userFiltered.map((item) => ({
+        id: String(item.id || `sub-${Date.now()}`),
+        appName: String(item.appName || 'Task'),
+        reward: Number(item.reward || 0),
+        status: (['Paid', 'Pending', 'Rejected'].includes(item.status)
+          ? item.status
+          : 'Pending') as 'Paid' | 'Pending' | 'Rejected',
+        date: String(item.time || 'Recently'),
+        proofType: String(item.proofType || 'Verification Proof'),
+        proofUrl: item.proofUrl ? String(item.proofUrl) : undefined,
+        appId: item.appId ? String(item.appId) : undefined,
+        appLogoUrl: item.appLogoUrl || item.logoUrl || undefined,
+      }));
+
+      cachedSubmissionsMap.set(key, results);
+      lastSubmissionsFetchMap.set(key, Date.now());
+      return results;
+    } catch (err) {
+      console.error('Error fetching live submissions:', err);
+      return cached || [];
+    } finally {
+      pendingSubmissionsPromiseMap.delete(key);
+    }
+  })();
+
+  pendingSubmissionsPromiseMap.set(key, promise);
+  return promise;
 }
 
 /**
@@ -227,6 +273,11 @@ export async function submitTaskProof(
       appId: payload.appId,
       appLogoUrl: payload.appLogoUrl,
     };
+
+    if (payload.userEmail) {
+      invalidateSubmissionsCache(payload.userEmail);
+    }
+    invalidateUserCache();
 
     return { success: true, item: newItem };
   } catch (err: any) {

@@ -78,8 +78,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   };
 
   useEffect(() => {
-    // Always fetch fresh on mount to ensure home is in sync with the database
-    loadData(true);
+    // Cache-first loading: use cached campaigns instantly without waking up the database
+    loadData(false);
   }, []);
 
   const onRefresh = async () => {

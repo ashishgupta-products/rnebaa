@@ -113,57 +113,99 @@ export async function clearBackendSession(): Promise<void> {
       STORAGE_KEYS.BACKEND_TOKEN,
       STORAGE_KEYS.BACKEND_USER,
     ]);
+    cachedBackendUser = null;
+    lastUserFetchTimestamp = 0;
   } catch (err) {
     console.warn('Error clearing backend session:', err);
   }
 }
 
-/**
- * Fetch latest user profile and real wallet balance from PostgreSQL database
- */
-export async function fetchLatestBackendUser(userEmail: string): Promise<BackendUser | null> {
-  if (!userEmail) return null;
-  try {
-    const token = await getSavedBackendToken();
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
+// In-memory cache for user profile to prevent continuous Neon PostgreSQL compute consumption
+let cachedBackendUser: BackendUser | null = null;
+let lastUserFetchTimestamp = 0;
+const USER_CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes TTL
+let pendingUserFetchPromise: Promise<BackendUser | null> | null = null;
 
-    const res = await fetch(
-      `${API_CONFIG.baseUrl}/api/users?email=${encodeURIComponent(userEmail.trim())}`,
-      { headers }
-    );
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const data = await res.json();
-    if (data && data.email) {
-      const backendUser: BackendUser = {
-        id: String(data.id || '1'),
-        email: data.email,
-        name: data.name || data.fullName || userEmail.split('@')[0],
-        role: data.role || 'user',
-        balance: Number(data.balance || 0),
-        originAppId: 'mobile',
-        phone: data.phone && data.phone !== 'N/A' ? String(data.phone) : undefined,
-        upiId:
-          data.paymentDetails && data.paymentDetails !== 'N/A'
-            ? String(data.paymentDetails)
-            : data.upi && data.upi !== 'N/A'
-            ? String(data.upi)
-            : undefined,
-        gender: data.gender && data.gender !== 'N/A' ? String(data.gender) : undefined,
-      };
-
-      await AsyncStorage.setItem(STORAGE_KEYS.BACKEND_USER, JSON.stringify(backendUser));
-      return backendUser;
-    }
-    return null;
-  } catch (err) {
-    console.warn('Error fetching latest backend user:', err);
-    return null;
-  }
+export function invalidateUserCache(): void {
+  cachedBackendUser = null;
+  lastUserFetchTimestamp = 0;
 }
+
+/**
+ * Fetch latest user profile and real wallet balance from PostgreSQL database.
+ * If forceFresh is false and cached within 3 minutes, returns from memory without hitting the database.
+ */
+export async function fetchLatestBackendUser(
+  userEmail: string,
+  forceFresh = false
+): Promise<BackendUser | null> {
+  if (!userEmail) return null;
+
+  const now = Date.now();
+  if (
+    !forceFresh &&
+    cachedBackendUser &&
+    cachedBackendUser.email.toLowerCase() === userEmail.toLowerCase() &&
+    now - lastUserFetchTimestamp < USER_CACHE_TTL_MS
+  ) {
+    return cachedBackendUser;
+  }
+
+  // Deduplicate simultaneous requests
+  if (pendingUserFetchPromise) {
+    return pendingUserFetchPromise;
+  }
+
+  pendingUserFetchPromise = (async () => {
+    try {
+      const token = await getSavedBackendToken();
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const res = await fetch(
+        `${API_CONFIG.baseUrl}/api/users?email=${encodeURIComponent(userEmail.trim())}`,
+        { headers }
+      );
+
+      if (!res.ok) {
+        return cachedBackendUser;
+      }
+
+      const data = await res.json();
+      if (data && data.email) {
+        const backendUser: BackendUser = {
+          id: String(data.id || '1'),
+          email: data.email,
+          name: data.name || data.fullName || userEmail.split('@')[0],
+          role: data.role || 'user',
+          balance: Number(data.balance || 0),
+          originAppId: 'mobile',
+          phone: data.phone && data.phone !== 'N/A' ? String(data.phone) : undefined,
+          upiId:
+            data.paymentDetails && data.paymentDetails !== 'N/A'
+              ? String(data.paymentDetails)
+              : data.upi && data.upi !== 'N/A'
+              ? String(data.upi)
+              : undefined,
+          gender: data.gender && data.gender !== 'N/A' ? String(data.gender) : undefined,
+        };
+
+        cachedBackendUser = backendUser;
+        lastUserFetchTimestamp = Date.now();
+        await AsyncStorage.setItem(STORAGE_KEYS.BACKEND_USER, JSON.stringify(backendUser));
+        return backendUser;
+      }
+      return cachedBackendUser;
+    } catch (err) {
+      console.warn('Error fetching latest backend user:', err);
+      return cachedBackendUser;
+    } finally {
+      pendingUserFetchPromise = null;
+    }
+  })();
+
+  return pendingUserFetchPromise;
+}
+

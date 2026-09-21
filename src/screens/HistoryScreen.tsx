@@ -101,9 +101,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
     return map;
   });
 
-  const loadCampaigns = async () => {
+  const loadCampaigns = async (forceFresh = false) => {
     try {
-      const list = await fetchLiveCampaigns();
+      const list = await fetchLiveCampaigns(forceFresh);
       const map = new Map<string, string>();
       list.forEach((c) => {
         if (c.id && c.logoUrl) map.set(c.id, c.logoUrl);
@@ -116,7 +116,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   };
 
   // Load stored withdrawals from local cache and sync with live database
-  const loadWithdrawalRequests = async () => {
+  const loadWithdrawalRequests = async (forceFresh = false) => {
     try {
       const emailKey = (user.email || '').toLowerCase().trim();
       const storageKey = getWithdrawalsStorageKey(user.email);
@@ -134,7 +134,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
       }
 
       if (user.email) {
-        const remote = await fetchUserPayouts(user.email);
+        const remote = await fetchUserPayouts(user.email, forceFresh);
         // Only update if remote fetch succeeded (non-null array)
         if (remote !== null && Array.isArray(remote)) {
           // Merge remote with any locally saved pending requests
@@ -151,7 +151,7 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
     }
   };
 
-  const loadSubmissions = async () => {
+  const loadSubmissions = async (forceFresh = false) => {
     try {
       // 1. Immediately hydrate from cache
       const emailKey = (user.email || '').toLowerCase().trim();
@@ -168,9 +168,9 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
         }
       }
 
-      // 2. Refresh live from server
+      // 2. Refresh live from server if needed
       if (user.email) {
-        const live = await fetchUserSubmissions(user.email);
+        const live = await fetchUserSubmissions(user.email, forceFresh);
         if (Array.isArray(live)) {
           const clean = live.filter((s) => !s.id?.startsWith('h-'));
           setHistoryItems(clean);
@@ -189,11 +189,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
 
   useEffect(() => {
     if (isActive) {
-      loadWithdrawalRequests();
-      loadSubmissions();
-      loadCampaigns();
+      loadWithdrawalRequests(false);
+      loadSubmissions(false);
+      loadCampaigns(false);
       if (user.email && onRefreshUser) {
-        fetchLatestBackendUser(user.email).then((u) => u && onRefreshUser(u));
+        fetchLatestBackendUser(user.email, false).then((u) => u && onRefreshUser(u));
       }
     }
   }, [isActive, user.email]);
@@ -210,11 +210,11 @@ export const HistoryScreen: React.FC<HistoryScreenProps> = ({
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([
-      loadWithdrawalRequests(),
-      loadSubmissions(),
-      loadCampaigns(),
+      loadWithdrawalRequests(true),
+      loadSubmissions(true),
+      loadCampaigns(true),
       user.email && onRefreshUser
-        ? fetchLatestBackendUser(user.email).then((u) => u && onRefreshUser(u))
+        ? fetchLatestBackendUser(user.email, true).then((u) => u && onRefreshUser(u))
         : Promise.resolve(),
     ]);
     setRefreshing(false);

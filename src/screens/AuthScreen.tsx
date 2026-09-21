@@ -363,24 +363,6 @@ export const AuthScreen: React.FC = () => {
               onSelectTab={(tab) => {
                 setSelectedCampaign(null);
                 setActiveTab(tab);
-                if (user?.email) {
-                  fetchLatestBackendUser(user.email).then((fresh) => {
-                    if (fresh) {
-                      setUser((prev) => {
-                        if (!prev) return prev;
-                        const merged: UserProfile = {
-                          ...prev,
-                          backendUser: fresh,
-                          upiId: prev.upiId || fresh.upiId || fresh.phone,
-                          phoneNumber: prev.phoneNumber || fresh.phone,
-                          gender: prev.gender || fresh.gender,
-                        };
-                        saveUserSession(merged).catch(() => {});
-                        return merged;
-                      });
-                    }
-                  });
-                }
               }}
             />
           </View>

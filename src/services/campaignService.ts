@@ -63,6 +63,9 @@ const CAMPAIGNS_CACHE_KEY = '@cached_campaigns_v1';
 
 // In-memory cache for live campaigns to avoid repetitive network calls and screen re-renders
 let cachedCampaigns: Campaign[] | null = null;
+let lastCampaignsFetchTimestamp = 0;
+const CAMPAIGNS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL
+let pendingCampaignsPromise: Promise<Campaign[]> | null = null;
 
 // Eagerly restore campaigns from AsyncStorage on module load for 0ms initial render
 AsyncStorage.getItem(CAMPAIGNS_CACHE_KEY)
@@ -85,31 +88,37 @@ export function getCachedCampaigns(): Campaign[] | null {
 /**
  * Fetch live campaigns directly from the production database at earnbyapps.com.
  * Returns only genuine, active campaigns.
- * If forceFresh is false and data is already in memory, returns immediately from cache.
+ * If forceFresh is false and data is cached within 5 minutes, returns immediately from cache to conserve Neon compute.
  */
 export async function fetchLiveCampaigns(forceFresh = false): Promise<Campaign[]> {
-  if (cachedCampaigns && !forceFresh) {
+  const now = Date.now();
+  if (cachedCampaigns && !forceFresh && now - lastCampaignsFetchTimestamp < CAMPAIGNS_CACHE_TTL_MS) {
     return cachedCampaigns;
   }
 
-  try {
-    const res = await fetch(`${API_CONFIG.baseUrl}/api/campaigns`, {
-      headers: {
-        Accept: 'application/json',
-      },
-    });
+  if (pendingCampaignsPromise) {
+    return pendingCampaignsPromise;
+  }
 
-    if (!res.ok) {
-      console.warn(`Campaigns fetch failed: HTTP ${res.status}`);
-      return cachedCampaigns || [];
-    }
+  pendingCampaignsPromise = (async () => {
+    try {
+      const res = await fetch(`${API_CONFIG.baseUrl}/api/campaigns`, {
+        headers: {
+          Accept: 'application/json',
+        },
+      });
 
-    const data = await res.json();
-    const rawList: any[] = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.campaigns)
-      ? data.campaigns
-      : [];
+      if (!res.ok) {
+        console.warn(`Campaigns fetch failed: HTTP ${res.status}`);
+        return cachedCampaigns || [];
+      }
+
+      const data = await res.json();
+      const rawList: any[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.campaigns)
+        ? data.campaigns
+        : [];
 
     const activeList = rawList.filter((item: any) => item && item.isActive !== false);
 
@@ -138,13 +147,19 @@ export async function fetchLiveCampaigns(forceFresh = false): Promise<Campaign[]
           isActive: true,
         };
       })
-    );
+      );
 
-    cachedCampaigns = campaigns;
-    AsyncStorage.setItem(CAMPAIGNS_CACHE_KEY, JSON.stringify(campaigns)).catch(() => {});
-    return campaigns;
-  } catch (err) {
-    console.error('Error fetching live campaigns from earnbyapps.com:', err);
-    return cachedCampaigns || [];
-  }
+      cachedCampaigns = campaigns;
+      lastCampaignsFetchTimestamp = Date.now();
+      AsyncStorage.setItem(CAMPAIGNS_CACHE_KEY, JSON.stringify(campaigns)).catch(() => {});
+      return campaigns;
+    } catch (err) {
+      console.error('Error fetching live campaigns from earnbyapps.com:', err);
+      return cachedCampaigns || [];
+    } finally {
+      pendingCampaignsPromise = null;
+    }
+  })();
+
+  return pendingCampaignsPromise;
 }

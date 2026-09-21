@@ -73,7 +73,8 @@ export const InstantScreen: React.FC<InstantScreenProps> = ({
   };
 
   useEffect(() => {
-    loadApps(true);
+    // Cache-first loading: use cached independent apps without waking up database
+    loadApps(false);
   }, []);
 
   const onRefresh = async () => {
